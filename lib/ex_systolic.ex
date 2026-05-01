@@ -29,19 +29,21 @@ defmodule ExSystolic do
 
       result = Clock.run(array, ticks: 5)
 
-  ## Module overview
+   ## Module overview
 
-  | Module | Role |
-  |--------|------|
-  | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
-  | `ExSystolic.Link` | FIFO communication channels between PE ports |
-  | `ExSystolic.PE` | Behaviour for processing elements |
-  | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
-  | `ExSystolic.Array` | Array construction: fill, connect, input |
-  | `ExSystolic.Clock` | Tick-by-tick execution driver |
-  | `ExSystolic.Trace` | Optional execution trace recording |
-  | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
-  | `ExSystolic.Examples.GEMM` | General matrix multiply |
+   | Module | Role |
+   |--------|------|
+   | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
+   | `ExSystolic.Space` | Pluggable space / topology behaviour |
+   | `ExSystolic.Space.Grid2D` | Default 2D rectangular space implementation |
+   | `ExSystolic.Link` | FIFO communication channels between PE ports |
+   | `ExSystolic.PE` | Behaviour for processing elements |
+   | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
+   | `ExSystolic.Array` | Array construction: fill, connect, input |
+   | `ExSystolic.Clock` | Tick-by-tick execution driver |
+   | `ExSystolic.Trace` | Optional execution trace recording |
+   | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
+   | `ExSystolic.Examples.GEMM` | General matrix multiply |
   """
 
   @doc """

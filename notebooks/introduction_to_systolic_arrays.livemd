@@ -17,9 +17,10 @@ This makes systolic arrays:
 | Concept | What it is | ex_systolic module |
 |---------|-----------|-------------------|
 | Grid | The coordinate geometry | `ExSystolic.Grid` |
+| Space | Pluggable topology / neighbour semantics | `ExSystolic.Space` + implementations like `ExSystolic.Space.Grid2D` |
 | PE | A stateful step function | `ExSystolic.PE` (behaviour) |
 | Link | A FIFO buffer between ports | `ExSystolic.Link` |
-| Array | A grid + PEs + links | `ExSystolic.Array` |
+| Array | A grid/space + PEs + links | `ExSystolic.Array` |
 | Clock | Drives tick-by-tick execution | `ExSystolic.Clock` |
 | Trace | Records every PE step | `ExSystolic.Trace` |
 
@@ -41,11 +42,23 @@ This order guarantees that no PE ever reads data produced in the same tick. Read
 
 Let us build a 2x2 array of multiply-accumulate (MAC) PEs and use it for matrix multiplication.
 
+By default the array uses a 2D rectangular space (`ExSystolic.Space.Grid2D`).
+You can either specify rows/cols (backwards compatible) or provide the
+space explicitly:
+
 ```elixir
 alias ExSystolic.{Array, Clock, PE.MAC}
+alias ExSystolic.Space.Grid2D
 
 array =
   Array.new(rows: 2, cols: 2)
+  |> Array.fill(MAC)
+  |> Array.connect(:west_to_east)
+  |> Array.connect(:north_to_south)
+
+# Equivalent explicit-space construction:
+array =
+  Array.new(space: {Grid2D, rows: 2, cols: 2})
   |> Array.fill(MAC)
   |> Array.connect(:west_to_east)
   |> Array.connect(:north_to_south)

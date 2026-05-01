@@ -29,18 +29,18 @@ defmodule ExSystolic.Array do
 
   The space module must implement `ExSystolic.Space`.
 
-  ## Data structure
+   ## Data structure
 
-  The array is a plain map with these keys:
+   The array is an `%ExSystolic.Array{}` struct with these fields:
 
-  - `:space`     -- `{module, opts}` tuple defining the spatial model
-  - `:grid`      -- the coordinate grid (backward compat, derived from space)
-  - `:pes`       -- map of coord => {module, state}
-  - `:links`     -- list of Link structs
-  - `:tick`      -- current tick counter
-  - `:trace`     -- trace data
-  - `:trace_enabled` -- whether tracing is active
-  - `:input_streams` -- pending external input streams
+   - `:space`     -- `{module, opts}` tuple defining the spatial model
+   - `:grid`      -- the coordinate grid (backward compat, derived from space)
+   - `:pes`       -- map of coord => {module, state}
+   - `:links`     -- list of Link structs
+   - `:tick`      -- current tick counter
+   - `:trace`     -- trace data
+   - `:trace_enabled` -- whether tracing is active
+   - `:input_streams` -- pending external input streams
   """
 
   alias ExSystolic.{Grid, Link, Space.Grid2D, Trace}

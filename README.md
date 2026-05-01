@@ -128,6 +128,51 @@ result = Clock.run(array, ticks: 5)
 
 ---
 
+## Phase 1.5: Pluggable Space / Topology
+
+By default, arrays live on a 2D rectangular grid implemented by
+`ExSystolic.Space.Grid2D`.  This behaviour is pluggable: you can supply a
+custom space module that defines the coordinate system and neighbour
+relationships.
+
+The two equivalent ways to construct a 3x3 array are:
+
+```elixir
+alias ExSystolic.Space.Grid2D
+
+# Classic API (backwards compatible)
+array = Array.new(rows: 3, cols: 3)
+
+# Explicit space API
+array = Array.new(space: {Grid2D, rows: 3, cols: 3})
+```
+
+A custom space implements the `ExSystolic.Space` behaviour:
+
+```elixir
+defmodule MySpace do
+  @behaviour ExSystolic.Space
+
+  @impl true
+  def normalize(coord), do: {:ok, coord}
+
+  @impl true
+  def neighbors(coord, opts), do: ...
+
+  @impl true
+  def ports(coord, opts), do: ...
+
+  @impl true
+  def coords(opts), do: ...
+end
+```
+
+Phase 1.5 added this Space abstraction without changing the clock or
+link semantics: execution is still strictly tick-based and
+deterministic, only the topology is now pluggable.
+
+---
+
 ## Simple Example: 2x2 Matrix Multiplication
 
 The `ExSystolic.Examples.GEMM` module provides a ready-made systolic GEMM:
