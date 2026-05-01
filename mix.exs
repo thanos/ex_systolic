@@ -1,7 +1,7 @@
 defmodule ExSystolic.MixProject do
   use Mix.Project
 
-  @source_url "https://github.com/anomalyco/ex_systolic"
+  @source_url "https://github.com/thanos/ex_systolic"
   @version "0.1.0"
 
   def project do
@@ -15,7 +15,10 @@ defmodule ExSystolic.MixProject do
         "A BEAM-native systolic array simulator -- clocked spatial dataflow with explicit ticks, links, and processing elements.",
       package: package(),
       docs: docs(),
-      test_coverage: [tool: ExCoveralls],
+      test_coverage: [
+        tool: ExCoveralls,
+        threshold: 90
+      ],
       dialyzer: [
         plt_local_path: "priv/plts/local.plt",
         plt_core_path: "priv/plts/core.plt"
@@ -47,7 +50,7 @@ defmodule ExSystolic.MixProject do
       links: %{
         "GitHub" => @source_url,
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
-        "Sponsor" => "https://github.com/sponsors/anomalyco"
+        "Coveralls" => "https://coveralls.io/github/thanos/ex_systolic"
       },
       files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
     ]

@@ -1,0 +1,9 @@
+{
+  "repo_token": "COVERALLS_REPO_TOKEN",
+  "skip_files": [
+    "lib/ex_systolic/pe.ex"
+  ],
+  "coverage_options": {
+    "treat_no_relevant_lines_as_covered": true
+  }
+}

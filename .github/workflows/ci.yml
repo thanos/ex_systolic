@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   test:
@@ -19,10 +20,10 @@ jobs:
         include:
           - elixir: "1.18"
             otp: "27"
+            primary: false
           - elixir: "1.19"
             otp: "28"
-          - elixir: "1.20.0-rc.3"
-            otp: "28"
+            primary: true
           - elixir: "1.20"
             otp: "29"
             experimental: true
@@ -35,6 +36,19 @@ jobs:
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+
+      - name: Cache Mix tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.mix
+            ~/.hex
+          key: mix-tools-${{ runner.os }}-${{ steps.setup-beam.outputs.elixir-version }}-${{ steps.setup-beam.outputs.otp-version }}
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Restore deps cache
         uses: actions/cache@v4
@@ -54,7 +68,7 @@ jobs:
         run: mix compile --warnings-as-errors
 
       - name: Check formatting
-        if: matrix.elixir == '1.19'
+        if: matrix.primary
         run: mix format --check-formatted
 
       - name: Run credo
@@ -63,8 +77,16 @@ jobs:
       - name: Run dialyzer
         run: mix dialyzer
 
-      - name: Run tests with coverage
+      - name: Run tests with coverage (local)
+        if: ${{ !matrix.primary }}
         run: mix coveralls
+
+      - name: Run tests with coverage (Coveralls)
+        if: matrix.primary
+        run: mix coveralls.github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MIX_ENV: test
 
       - name: Audit dependencies
         run: mix deps.audit
@@ -77,9 +99,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: erlef/setup-beam@v1
+        id: setup-beam
         with:
           otp-version: "28"
           elixir-version: "1.19"
+
+      - name: Cache Mix tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.mix
+            ~/.hex
+          key: mix-tools-${{ runner.os }}-${{ steps.setup-beam.outputs.elixir-version }}-${{ steps.setup-beam.outputs.otp-version }}
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Restore deps cache
         uses: actions/cache@v4
