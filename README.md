@@ -2,9 +2,16 @@
 
 A BEAM-native systolic array simulator -- a **clocked spatial dataflow simulator** with explicit time (ticks), explicit data movement (links), and local processing elements (PEs).
 
+[![Hex.pm](https://img.shields.io/hexpm/v/ex_systolic.svg)](https://hex.pm/packages/ex_systolic)
+[![Hex.pm](https://img.shields.io/hexpm/dt/ex_systolic.svg)](https://hex.pm/packages/ex_systolic)
+[![Hex.pm](https://img.shields.io/hexpm/l/ex_systolic.svg)](https://hex.pm/packages/ex_systolic)
+[![HexDocs.pm](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/ex_systolic)
+[![Coverage Status](https://coveralls.io/repos/github/thanos/ex_systolic/badge.svg?branch=main)](https://coveralls.io/github/thanos/ex_systolic?branch=main)
+
 This is not a spreadsheet engine, a DAG executor, or a reactive system. This is a systolic array: data pulses through a grid of simple processors in a regular rhythm, like blood through a heart.
 
 ---
+
 
 ## Tutorial: What Is a Systolic Array?
 
