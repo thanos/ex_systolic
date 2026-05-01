@@ -20,11 +20,11 @@ defmodule ExSystolic.Space do
   This means you can introduce a graph topology, a hierarchical layout,
   or a vector space in a future phase without touching execution logic.
 
-  ## Implementing a custom space
+   ## Implementing a custom space
 
-  Any module that implements the three callbacks below can serve as a
-  space.  The `opts` argument lets the same module serve multiple
-  configurations (e.g. different grid sizes).
+   Any module that implements the callbacks below can serve as a
+   space.  The `opts` argument lets the same module serve multiple
+   configurations (e.g. different grid sizes).
 
       defmodule MyGraphSpace do
         @behaviour ExSystolic.Space
@@ -37,8 +37,11 @@ defmodule ExSystolic.Space do
           Map.get(adjacency, coord, %{})
         end
 
-        @impl true
-        def ports(_coord, _opts), do: [:in, :out]
+         @impl true
+         def ports(_coord, _opts), do: [:in, :out]
+
+         @impl true
+         def coords(adjacency), do: Map.keys(adjacency)
       end
   """
 
