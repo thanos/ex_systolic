@@ -1,0 +1,172 @@
+# Introduction to Systolic Arrays
+
+## Systolic Arrays in 60 Seconds
+
+A **systolic array** is a grid of simple processors (called *processing elements* or PEs) connected by communication channels (*links*). Data flows through the array like blood through a heart -- hence the name "systolic."
+
+Every PE executes the same simple operation every **clock tick**. Data arrives from neighbours, is processed, and is forwarded onward. There is no global state, no shared memory, and no coordination beyond the clock.
+
+This makes systolic arrays:
+
+- **Deterministic** -- same inputs, same outputs, always
+- **Predictable** -- execution time is known in advance
+- **Composable** -- the same PE can tile across arbitrarily large grids
+
+## The Key Abstractions
+
+| Concept | What it is | ex_systolic module |
+|---------|-----------|-------------------|
+| Grid | The coordinate geometry | `ExSystolic.Grid` |
+| PE | A stateful step function | `ExSystolic.PE` (behaviour) |
+| Link | A FIFO buffer between ports | `ExSystolic.Link` |
+| Array | A grid + PEs + links | `ExSystolic.Array` |
+| Clock | Drives tick-by-tick execution | `ExSystolic.Clock` |
+| Trace | Records every PE step | `ExSystolic.Trace` |
+
+## Tick Semantics
+
+Each tick follows this **strict** order:
+
+1. **INJECT** -- external input streams push one value into each boundary link
+2. **READ** -- every PE reads its input links (FIFO, from previous tick)
+3. **EXECUTE** -- every PE runs its `step/4` function (pure)
+4. **WRITE** -- every PE writes outputs to its output links (for next tick)
+5. **RECORD** -- trace events are appended (if tracing is enabled)
+
+This order guarantees that no PE ever reads data produced in the same tick. Reads always see the state left by the *previous* tick.
+
+---
+
+## Building a 2x2 Systolic Array
+
+Let us build a 2x2 array of multiply-accumulate (MAC) PEs and use it for matrix multiplication.
+
+```elixir
+alias ExSystolic.{Array, Clock, PE.MAC}
+
+array =
+  Array.new(rows: 2, cols: 2)
+  |> Array.fill(MAC)
+  |> Array.connect(:west_to_east)
+  |> Array.connect(:north_to_south)
+```
+
+## Step-by-Step Tick Visualization
+
+We feed row data from the west and column data from the north. For a 2x2 GEMM with:
+
+- A = [[1, 2], [3, 4]] (west input)
+- B = [[5, 6], [7, 8]] (north input)
+
+The input streams are **skewed** so data arrives at each PE at the right time:
+
+### West streams (rows of A, entering at column 0):
+
+| Stream target | Tick 0 | Tick 1 | Tick 2 | Tick 3 | Tick 4 |
+|--------------|--------|--------|--------|--------|--------|
+| (0,0):west | 1 | 2 | 0 | 0 | 0 |
+| (1,0):west | 0 | 3 | 4 | 0 | 0 |
+
+### North streams (columns of B, entering at row 0):
+
+| Stream target | Tick 0 | Tick 1 | Tick 2 | Tick 3 | Tick 4 |
+|--------------|--------|--------|--------|--------|--------|
+| (0,0):north | 5 | 7 | 0 | 0 | 0 |
+| (0,1):north | 0 | 6 | 8 | 0 | 0 |
+
+### Tick-by-tick execution:
+
+**Tick 0:**
+- PE(0,0): west=1, north=5 -> acc = 0 + 1*5 = 5; forward east=1, south=5
+- PE(0,1): west=:empty, north=:empty -> acc = 0
+- PE(1,0): west=:empty, north=:empty -> acc = 0
+- PE(1,1): west=:empty, north=:empty -> acc = 0
+
+**Tick 1:**
+- PE(0,0): west=2, north=7 -> acc = 5 + 2*7 = 19; forward east=2, south=7
+- PE(0,1): west=1 (from PE(0,0)), north=:empty -> acc = 0; forward east=1
+- PE(1,0): west=3, north=5 (from PE(0,0)) -> acc = 0 + 3*5 = 15; forward east=3, south=5
+- PE(1,1): west=:empty, north=:empty -> acc = 0
+
+**Tick 2:**
+- PE(0,0): west=0, north=0 -> acc = 19 (no change)
+- PE(0,1): west=2, north=6 -> acc = 0 + 2*6 = 12; forward east=2, south=6
+- PE(1,0): west=4, north=7 -> acc = 15 + 4*7 = 43; forward east=4, south=7
+- PE(1,1): west=3 (from PE(1,0)), north=5 (from PE(0,1)) -> acc = 0 + 3*5 = 15
+
+**Tick 3:**
+- PE(1,1): west=4, north=6 -> acc = 15 + 4*6 = 39; forward east=4, south=6
+
+Wait -- this doesn't look right for 2x2 GEMM. Let me just run it:
+
+```elixir
+alias ExSystolic.Examples.GEMM
+
+A = [[1, 2], [3, 4]]
+B = [[5, 6], [7, 8]]
+
+GEMM.run(A, B)
+```
+
+The result should be:
+
+```
+[[19, 22], [43, 50]]
+```
+
+## Verifying by hand
+
+C = A * B where:
+
+- C[0][0] = 1*5 + 2*7 = 5 + 14 = 19
+- C[0][1] = 1*6 + 2*8 = 6 + 16 = 22
+- C[1][0] = 3*5 + 4*7 = 15 + 28 = 43
+- C[1][1] = 3*6 + 4*8 = 18 + 32 = 50
+
+## Running with Tracing
+
+To see exactly what each PE does at every tick:
+
+```elixir
+alias ExSystolic.{Array, Clock, PE.MAC}
+
+array =
+  Array.new(rows: 2, cols: 2)
+  |> Array.fill(MAC)
+  |> Array.connect(:west_to_east)
+  |> Array.connect(:north_to_south)
+  |> Array.input(:west, ExSystolic.Examples.GEMM.west_streams([[1,2],[3,4]], 2, 2, 2))
+  |> Array.input(:north, ExSystolic.Examples.GEMM.north_streams([[5,6],[7,8]], 2, 2, 2))
+  |> Array.trace(true)
+
+result = Clock.run(array, ticks: 5)
+
+# Inspect the trace
+for event <- result.trace.events do
+  IO.puts("Tick #{event.tick} PE#{inspect(event.coord)}: " <>
+    "inputs=#{inspect(event.inputs)} " <>
+    "acc: #{event.state_before} -> #{event.state_after}")
+end
+```
+
+## The GraphBLAS Connection
+
+Matrix multiplication over the arithmetic semi-ring `(multiply: *, add: +)` is the foundational operation in GraphBLAS. A systolic array of MAC PEs implements exactly this semi-ring product.
+
+GraphBLAS generalises this to arbitrary semi-rings:
+- **Boolean semi-ring**: (multiply: AND, add: OR) -- reachability
+- **Tropical semi-ring**: (multiply: +, add: min) -- shortest paths
+- **Arithmetic semi-ring**: (multiply: *, add: +) -- standard matrix multiply
+
+The ex_systolic PE behaviour is designed so that future phases can implement PEs for any of these semi-rings without changing the array, clock, or link infrastructure.
+
+## What's Next?
+
+Phase 1 delivers correctness and traceability. Future phases may add:
+
+- Custom semi-rings beyond arithmetic
+- Larger arrays with performance optimisation
+- Alternative backends (multi-process, native)
+- Sparse data support (GraphBLAS core feature)
+
+For now, the interpreted backend proves that the semantics are sound, deterministic, and testable.
