@@ -41,7 +41,7 @@ defmodule ExSystolic.MixProject do
 
   defp package do
     [
-      maintainers: ["Thanos"],
+      maintainers: ["Thanos Vassilakis"],
       licenses: ["Apache-2.0"],
       links: %{
         "GitHub" => @source_url,
