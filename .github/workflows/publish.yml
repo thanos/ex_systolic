@@ -16,9 +16,23 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: erlef/setup-beam@v1
+        id: setup-beam
         with:
           otp-version: "28"
           elixir-version: "1.19"
+
+      - name: Cache Mix tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.mix
+            ~/.hex
+          key: mix-tools-${{ runner.os }}-${{ steps.setup-beam.outputs.elixir-version }}-${{ steps.setup-beam.outputs.otp-version }}
+
+      - name: Install Hex and Rebar
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
 
       - name: Restore deps cache
         uses: actions/cache@v4
