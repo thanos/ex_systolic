@@ -47,13 +47,22 @@ defmodule ExSystolic.Array do
 
   @type space_spec :: {module(), keyword()}
 
-  @type t :: %{
+  defstruct space: nil,
+            grid: nil,
+            pes: %{},
+            links: [],
+            tick: 0,
+            trace: Trace.new(),
+            trace_enabled: false,
+            input_streams: %{}
+
+  @type t :: %__MODULE__{
           space: space_spec(),
           grid: Grid.t(),
           pes: %{Grid.coord() => {module(), ExSystolic.PE.state()}},
           links: [Link.t()],
           tick: non_neg_integer(),
-          trace: %{events: [Trace.Event.t()]},
+          trace: Trace.t(),
           trace_enabled: boolean(),
           input_streams: %{{Grid.coord(), atom()} => [term()]}
         }
@@ -87,7 +96,7 @@ defmodule ExSystolic.Array do
     grid =
       Grid.rect(rows: Keyword.fetch!(grid_opts, :rows), cols: Keyword.fetch!(grid_opts, :cols))
 
-    %{
+    %__MODULE__{
       space: {space_mod, space_opts},
       grid: grid,
       pes: %{},
@@ -112,7 +121,13 @@ defmodule ExSystolic.Array do
   end
 
   defp extract_grid_opts(Grid2D, space_opts, _opts), do: space_opts
-  defp extract_grid_opts(_mod, _space_opts, opts), do: Keyword.take(opts, [:rows, :cols])
+
+  defp extract_grid_opts(_mod, space_opts, opts) do
+    case Keyword.take(opts, [:rows, :cols]) do
+      [] -> space_opts
+      grid_opts -> grid_opts
+    end
+  end
 
   @doc """
   Fills every grid position with the given PE module.
@@ -212,7 +227,7 @@ defmodule ExSystolic.Array do
     rows = Keyword.fetch!(opts, :rows)
 
     for r <- 0..(rows - 1) do
-      Link.new({{-1, r}, :east}, {{r, 0}, :west})
+      Link.new({{r, -1}, :east}, {{r, 0}, :west})
     end
   end
 
@@ -234,7 +249,7 @@ defmodule ExSystolic.Array do
     cols = Keyword.fetch!(opts, :cols)
 
     for c <- 0..(cols - 1) do
-      Link.new({{c, -1}, :south}, {{0, c}, :north})
+      Link.new({{-1, c}, :south}, {{0, c}, :north})
     end
   end
 
@@ -278,8 +293,8 @@ defmodule ExSystolic.Array do
   defp direction_ports(:west_to_east), do: {:east, :west}
   defp direction_ports(:north_to_south), do: {:south, :north}
 
-  defp boundary_from({r, _c}, :east), do: {{-1, r}, :east}
-  defp boundary_from({_r, c}, :south), do: {{c, -1}, :south}
+  defp boundary_from({r, _c}, :east), do: {{r, -1}, :east}
+  defp boundary_from({_r, c}, :south), do: {{-1, c}, :south}
 
   @doc """
   Materializes all links for the array using its Space module.
@@ -387,9 +402,15 @@ defmodule ExSystolic.Array do
   def result_matrix(%{grid: grid, pes: pes}) do
     for r <- 0..(grid.rows - 1) do
       for c <- 0..(grid.cols - 1) do
-        {_mod, state} = pes[{r, c}]
-        state
+        cell_state(pes, {r, c})
       end
+    end
+  end
+
+  defp cell_state(pes, coord) do
+    case Map.get(pes, coord) do
+      {_mod, state} -> state
+      nil -> nil
     end
   end
 end

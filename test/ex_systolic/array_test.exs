@@ -19,6 +19,7 @@ defmodule ExSystolic.ArrayTest do
     @impl true
     def ports(_coord, _opts), do: [:north, :south, :east, :west]
 
+    @impl true
     def coords(_opts), do: [{0, 0}, {0, 1}, {1, 0}, {1, 1}]
   end
 

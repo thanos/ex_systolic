@@ -55,22 +55,28 @@ defmodule ExSystolic.Examples.GEMM do
   """
   @spec run([[number()]], [[number()]]) :: [[number()]]
   def run(a, b) do
-    m = length(a)
-    k = length(hd(a))
-    n = length(hd(b))
+    case a do
+      [] ->
+        []
 
-    array =
-      Array.new(rows: m, cols: n)
-      |> Array.fill(MAC)
-      |> Array.connect(:west_to_east)
-      |> Array.connect(:north_to_south)
-      |> Array.input(:west, west_streams(a, m, k, n))
-      |> Array.input(:north, north_streams(b, m, k, n))
+      _ ->
+        m = length(a)
+        k = length(hd(a))
+        n = length(hd(b))
 
-    ticks_needed = k + m + n - 1
-    result = Clock.run(array, ticks: ticks_needed)
+        array =
+          Array.new(rows: m, cols: n)
+          |> Array.fill(MAC)
+          |> Array.connect(:west_to_east)
+          |> Array.connect(:north_to_south)
+          |> Array.input(:west, west_streams(a, m, k, n))
+          |> Array.input(:north, north_streams(b, m, k, n))
 
-    Array.result_matrix(result)
+        ticks_needed = k + m + n - 1
+        result = Clock.run(array, ticks: ticks_needed)
+
+        Array.result_matrix(result)
+    end
   end
 
   @doc """

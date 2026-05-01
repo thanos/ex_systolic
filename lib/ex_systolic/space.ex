@@ -54,7 +54,11 @@ defmodule ExSystolic.Space do
   @callback normalize(term()) :: {:ok, coord()} | {:error, term()}
 
   @doc """
-  Returns the neighbours of a coordinate as a map of port => neighbour_coord.
+  Returns the neighbours of a coordinate as a map of `port => neighbour_coord`.
+
+  The shape and meaning of `opts` is defined by the concrete space
+  implementation (for example, `rows:` / `cols:` for a rectangular
+  grid, or an adjacency map for a graph space).
 
   Ports that have no neighbour (boundary) should map to `nil`.
   """
@@ -63,8 +67,21 @@ defmodule ExSystolic.Space do
   @doc """
   Returns the list of port names that a coordinate exposes.
 
+  The `opts` parameter is the same configuration that was passed when
+  constructing the array's space (for example, grid dimensions).  It is
+  provided so implementations can vary the available ports with the
+  configuration if needed.
+
   This determines which input/output ports the PE at that coordinate
   will use.
   """
   @callback ports(coord(), opts :: term()) :: [atom()]
+
+  @doc """
+  Returns all valid coordinates for a particular space configuration.
+
+  The meaning and shape of `opts` is implementation-defined, but should
+  match what is accepted by `neighbors/2` and `ports/2`.
+  """
+  @callback coords(opts :: term()) :: [coord()]
 end

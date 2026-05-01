@@ -113,6 +113,7 @@ defmodule ExSystolic.Space.Grid2D do
       [{0, 0}, {0, 1}, {1, 0}, {1, 1}]
 
   """
+  @impl true
   @spec coords(keyword()) :: [coord()]
   def coords(opts) do
     rows = Keyword.fetch!(opts, :rows)

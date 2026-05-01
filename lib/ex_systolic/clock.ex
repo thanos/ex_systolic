@@ -39,10 +39,10 @@ defmodule ExSystolic.Clock do
       2
 
   """
-  @spec run(map(), keyword()) :: map()
+  @spec run(ExSystolic.Array.t(), keyword()) :: ExSystolic.Array.t()
   def run(array, opts) do
     ticks = Keyword.fetch!(opts, :ticks)
-    Enum.reduce(1..ticks, array, fn _, acc -> step(acc) end)
+    Enum.reduce(1..ticks//1, array, fn _, acc -> step(acc) end)
   end
 
   @doc """
@@ -67,7 +67,7 @@ defmodule ExSystolic.Clock do
       1
 
   """
-  @spec step(map()) :: map()
+  @spec step(ExSystolic.Array.t()) :: ExSystolic.Array.t()
   def step(array) do
     %{
       pes: pes,
@@ -80,13 +80,12 @@ defmodule ExSystolic.Clock do
 
     {links_after_inject, remaining_streams} = inject_inputs(links, input_streams)
 
+    # Derive input ports from the current link endpoints so that custom
+    # spaces with different port names are supported.
     input_ports =
-      for {coord, {_mod, _state}} <- pes do
-        {coord, :west}
-      end ++
-        for {coord, {_mod, _state}} <- pes do
-          {coord, :north}
-        end
+      links_after_inject
+      |> Enum.map(& &1.to)
+      |> Enum.uniq()
 
     {inputs_map, drained_links} = read_all_links(links_after_inject, input_ports)
 
