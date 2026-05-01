@@ -1,13 +1,19 @@
 defmodule ExSystolic.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/anomalyco/ex_systolic"
+  @version "0.1.0"
+
   def project do
     [
       app: :ex_systolic,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      description: "A BEAM-native systolic array simulator -- clocked spatial dataflow with explicit ticks, links, and processing elements.",
+      package: package(),
+      docs: docs(),
       test_coverage: [tool: ExCoveralls],
       dialyzer: [
         plt_local_path: "priv/plts/local.plt",
@@ -30,6 +36,38 @@ defmodule ExSystolic.MixProject do
   def application do
     [
       extra_applications: [:logger]
+    ]
+  end
+
+  defp package do
+    [
+      maintainers: ["Thanos"],
+      licenses: ["Apache-2.0"],
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
+        "Sponsor" => "https://github.com/sponsors/anomalyco"
+      },
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_url: @source_url,
+      source_ref: "v#{@version}",
+      extras: [
+        "README.md": [title: "README"],
+        "CHANGELOG.md": [title: "Changelog"],
+        "LICENSE": [title: "License"]
+      ],
+      groups_for_modules: [
+        "Core": [ExSystolic.Grid, ExSystolic.Link, ExSystolic.PE, ExSystolic.Array, ExSystolic.Clock, ExSystolic.Trace],
+        "Processing Elements": [ExSystolic.PE.MAC],
+        "Backends": [ExSystolic.Backend.Interpreted],
+        "Examples": [ExSystolic.Examples.GEMM]
+      ]
     ]
   end
 

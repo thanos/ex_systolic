@@ -2,12 +2,20 @@ defmodule ExSystolic do
   @moduledoc """
   A BEAM-native systolic array simulator.
 
-  ex_systolic is a clocked spatial dataflow simulator: explicit time
+  ex_systolic is a **clocked spatial dataflow simulator**: explicit time
   (ticks), explicit data movement (links), and local processing elements
-  (PEs).  It is NOT a spreadsheet engine, a DAG executor, or a reactive
-  system.
+  (PEs). Data pulses through a grid of simple processors in a regular
+  rhythm, like blood through a heart.
 
-  ## Quick start
+  This is not a spreadsheet engine, a DAG executor, or a reactive system.
+
+  ## Tutorial & Examples
+
+  The full tutorial, quick-start guide, real-world examples (image
+  convolution, shortest paths), architecture diagrams, roadmap, and
+  references are in the [README](readme.html).
+
+  ## One-minute quick start
 
       alias ExSystolic.{Array, Clock, PE.MAC}
 
@@ -16,20 +24,24 @@ defmodule ExSystolic do
         |> Array.fill(MAC)
         |> Array.connect(:west_to_east)
         |> Array.connect(:north_to_south)
+        |> Array.input(:west, [{{0, 0}, [1, 2]}, {{1, 0}, [3, 4]}])
+        |> Array.input(:north, [{{0, 0}, [5, 7]}, {{0, 1}, [6, 8]}])
 
       result = Clock.run(array, ticks: 5)
 
-  ## Architecture
+  ## Module overview
 
-  - `ExSystolic.Grid` -- rectangular coordinate geometry
-  - `ExSystolic.Link` -- FIFO communication channels between PEs
-  - `ExSystolic.PE` -- behaviour for processing elements
-  - `ExSystolic.PE.MAC` -- multiply-accumulate PE
-  - `ExSystolic.Array` -- array construction and configuration
-  - `ExSystolic.Clock` -- tick-by-tick execution driver
-  - `ExSystolic.Trace` -- optional execution trace recording
-  - `ExSystolic.Backend.Interpreted` -- single-process reference backend
-  - `ExSystolic.Examples.GEMM` -- general matrix multiply example
+  | Module | Role |
+  |--------|------|
+  | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
+  | `ExSystolic.Link` | FIFO communication channels between PE ports |
+  | `ExSystolic.PE` | Behaviour for processing elements |
+  | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
+  | `ExSystolic.Array` | Array construction: fill, connect, input |
+  | `ExSystolic.Clock` | Tick-by-tick execution driver |
+  | `ExSystolic.Trace` | Optional execution trace recording |
+  | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
+  | `ExSystolic.Examples.GEMM` | General matrix multiply |
   """
 
   @doc """
