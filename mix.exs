@@ -11,7 +11,8 @@ defmodule ExSystolic.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      description: "A BEAM-native systolic array simulator -- clocked spatial dataflow with explicit ticks, links, and processing elements.",
+      description:
+        "A BEAM-native systolic array simulator -- clocked spatial dataflow with explicit ticks, links, and processing elements.",
       package: package(),
       docs: docs(),
       test_coverage: [tool: ExCoveralls],
@@ -60,13 +61,20 @@ defmodule ExSystolic.MixProject do
       extras: [
         "README.md": [title: "README"],
         "CHANGELOG.md": [title: "Changelog"],
-        "LICENSE": [title: "License"]
+        LICENSE: [title: "License"]
       ],
       groups_for_modules: [
-        "Core": [ExSystolic.Grid, ExSystolic.Link, ExSystolic.PE, ExSystolic.Array, ExSystolic.Clock, ExSystolic.Trace],
+        Core: [
+          ExSystolic.Grid,
+          ExSystolic.Link,
+          ExSystolic.PE,
+          ExSystolic.Array,
+          ExSystolic.Clock,
+          ExSystolic.Trace
+        ],
         "Processing Elements": [ExSystolic.PE.MAC],
-        "Backends": [ExSystolic.Backend.Interpreted],
-        "Examples": [ExSystolic.Examples.GEMM]
+        Backends: [ExSystolic.Backend.Interpreted],
+        Examples: [ExSystolic.Examples.GEMM]
       ]
     ]
   end
