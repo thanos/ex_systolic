@@ -31,25 +31,13 @@ defmodule ExSystolic.Backend.Interpreted do
   alias ExSystolic.Link
   alias ExSystolic.Trace
 
-  @doc """
-  Reads all link buffers and returns a map of {coord, port} => value.
-
-  For each link whose `to` endpoint matches a PE port, the oldest value
-  in the buffer is consumed (FIFO).  If the buffer is empty, `:empty` is
-  delivered.
-
-  ## Examples
-
-      iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
-      iex> {:ok, link2} = ExSystolic.Link.write(link, 42)
-      iex> inputs = ExSystolic.Backend.Interpreted.read_inputs([link2], [{{1,0}, :west}])
-      iex> inputs[{{1,0}, :west}]
-      42
-
-  """
+  @doc false
   @spec read_inputs([Link.t()], [{ExSystolic.Grid.coord(), atom()}]) ::
           %{{ExSystolic.Grid.coord(), atom()} => term()}
   def read_inputs(links, input_ports) do
+    # Legacy helper kept for backwards compatibility. The Clock module
+    # contains the authoritative implementation that both reads and
+    # drains link buffers.
     link_map = for link <- links, into: %{}, do: {link.to, link}
 
     for {coord, port} <- input_ports, into: %{} do
@@ -57,12 +45,8 @@ defmodule ExSystolic.Backend.Interpreted do
 
       value =
         case Map.get(link_map, key) do
-          nil ->
-            :empty
-
-          link ->
-            {val, _} = Link.read(link)
-            val
+          nil -> :empty
+          link -> elem(Link.read(link), 0)
         end
 
       {key, value}
@@ -106,7 +90,7 @@ defmodule ExSystolic.Backend.Interpreted do
       context = %{coord: coord}
       {new_state, pe_outputs} = mod.step(state, pe_inputs, tick, context)
 
-      event =
+      new_events =
         if trace_enabled do
           [
             %Trace.Event{
@@ -117,13 +101,14 @@ defmodule ExSystolic.Backend.Interpreted do
               state_before: state,
               state_after: new_state
             }
+            | acc_evts
           ]
         else
-          []
+          acc_evts
         end
 
       {Map.put(acc_pes, coord, {mod, new_state}), Map.put(acc_outs, coord, pe_outputs),
-       acc_evts ++ event}
+       new_events}
     end)
   end
 

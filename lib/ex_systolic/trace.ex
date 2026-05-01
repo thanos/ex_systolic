@@ -43,6 +43,10 @@ defmodule ExSystolic.Trace do
     defstruct [:tick, :coord, :inputs, :outputs, :state_before, :state_after]
   end
 
+  defstruct events: []
+
+  @type t :: %__MODULE__{events: [event()]}
+
   @doc """
   Creates a new trace from a list of events.
 
@@ -53,9 +57,9 @@ defmodule ExSystolic.Trace do
       []
 
   """
-  @spec new([event()]) :: %{events: [event()]}
+  @spec new([event()]) :: t()
   def new(events \\ []) do
-    %{events: events}
+    %__MODULE__{events: events}
   end
 
   @doc """
@@ -70,9 +74,11 @@ defmodule ExSystolic.Trace do
       1
 
   """
-  @spec record(%{events: [event()]}, event()) :: %{events: [event()]}
-  def record(%{events: events} = _trace, event) do
-    %{events: events ++ [event]}
+  @spec record(t(), event()) :: t()
+  def record(%__MODULE__{events: events} = trace, event) do
+    # Prepend for O(1) amortized appends; callers that care about
+    # chronological order can reverse.
+    %__MODULE__{trace | events: [event | events]}
   end
 
   @doc """
@@ -87,9 +93,11 @@ defmodule ExSystolic.Trace do
       1
 
   """
-  @spec at(%{events: [event()]}, non_neg_integer()) :: [event()]
-  def at(%{events: events}, tick) do
-    Enum.filter(events, &(&1.tick == tick))
+  @spec at(t(), non_neg_integer()) :: [event()]
+  def at(%__MODULE__{events: events}, tick) do
+    events
+    |> Enum.reverse()
+    |> Enum.filter(&(&1.tick == tick))
   end
 
   @doc """
@@ -104,8 +112,10 @@ defmodule ExSystolic.Trace do
       1
 
   """
-  @spec for_coord(%{events: [event()]}, ExSystolic.Grid.coord()) :: [event()]
-  def for_coord(%{events: events}, coord) do
-    Enum.filter(events, &(&1.coord == coord))
+  @spec for_coord(t(), ExSystolic.Grid.coord()) :: [event()]
+  def for_coord(%__MODULE__{events: events}, coord) do
+    events
+    |> Enum.reverse()
+    |> Enum.filter(&(&1.coord == coord))
   end
 end

@@ -42,6 +42,12 @@ defmodule ExSystolic.Grid do
   def rect(opts) do
     rows = Keyword.fetch!(opts, :rows)
     cols = Keyword.fetch!(opts, :cols)
+
+    if rows < 1 or cols < 1 do
+      raise ArgumentError,
+            "rows and cols must be positive, got rows=#{inspect(rows)}, cols=#{inspect(cols)}"
+    end
+
     %__MODULE__{rows: rows, cols: cols}
   end
 

@@ -75,6 +75,10 @@ defmodule ExSystolic.MixProject do
           ExSystolic.Clock,
           ExSystolic.Trace
         ],
+        Space: [
+          ExSystolic.Space,
+          ExSystolic.Space.Grid2D
+        ],
         "Processing Elements": [ExSystolic.PE.MAC],
         Backends: [ExSystolic.Backend.Interpreted],
         Examples: [ExSystolic.Examples.GEMM]
