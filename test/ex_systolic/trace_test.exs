@@ -65,7 +65,11 @@ defmodule ExSystolic.TraceTest do
       }
 
       trace2 = trace |> Trace.record(e0) |> Trace.record(e1)
-      assert [0, 1] = Enum.map(trace2.events, & &1.tick)
+
+      # Trace stores events in reverse-chronological order for
+      # efficient appends, so reverse before asserting the logical
+      # sequence.
+      assert [0, 1] = trace2.events |> Enum.reverse() |> Enum.map(& &1.tick)
     end
   end
 

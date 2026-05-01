@@ -77,20 +77,20 @@ defmodule ExSystolic.ArrayTest do
 
     test "boundary links for west input target column 0" do
       array = Array.new(rows: 2, cols: 3) |> Array.fill(MAC) |> Array.connect(:west_to_east)
-      boundary = Enum.find(array.links, &(&1.from == {{-1, 0}, :east}))
+      boundary = Enum.find(array.links, &(&1.from == {{0, -1}, :east}))
       assert boundary != nil
       assert boundary.to == {{0, 0}, :west}
-      boundary1 = Enum.find(array.links, &(&1.from == {{-1, 1}, :east}))
+      boundary1 = Enum.find(array.links, &(&1.from == {{1, -1}, :east}))
       assert boundary1 != nil
       assert boundary1.to == {{1, 0}, :west}
     end
 
     test "boundary links for north input target row 0" do
       array = Array.new(rows: 2, cols: 3) |> Array.fill(MAC) |> Array.connect(:north_to_south)
-      boundary0 = Enum.find(array.links, &(&1.from == {{0, -1}, :south}))
+      boundary0 = Enum.find(array.links, &(&1.from == {{-1, 0}, :south}))
       assert boundary0 != nil
       assert boundary0.to == {{0, 0}, :north}
-      boundary1 = Enum.find(array.links, &(&1.from == {{1, -1}, :south}))
+      boundary1 = Enum.find(array.links, &(&1.from == {{-1, 1}, :south}))
       assert boundary1 != nil
       assert boundary1.to == {{0, 1}, :north}
     end
@@ -238,7 +238,8 @@ defmodule ExSystolic.ArrayTest do
 
       boundary =
         Enum.filter(array.links, fn link ->
-          elem(link.from, 0) |> elem(0) < 0
+          {r, c} = elem(link.from, 0)
+          r < 0 or c < 0
         end)
 
       assert boundary != []
