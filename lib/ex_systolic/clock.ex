@@ -114,32 +114,32 @@ defmodule ExSystolic.Clock do
   end
 
   defp inject_inputs(links, input_streams) do
-    Enum.reduce(input_streams, {links, %{}}, fn {{coord, port} = key, stream},
-                                                           {acc_links, acc_streams} ->
-      link_idx =
-        Enum.find_index(acc_links, fn l -> l.to == {coord, port} end)
-
-      case {stream, link_idx} do
-        {[val | rest], idx} when idx != nil ->
-          link = Enum.at(acc_links, idx)
-
-          case ExSystolic.Link.write(link, val) do
-            {:ok, new_link} ->
-              new_links = List.replace_at(acc_links, idx, new_link)
-              new_streams = if rest == [], do: acc_streams, else: Map.put(acc_streams, key, rest)
-              {new_links, new_streams}
-
-            {:error, :full} ->
-              {acc_links, Map.put(acc_streams, key, stream)}
-          end
-
-        {[], _} ->
-          {acc_links, acc_streams}
-
-        {_, nil} ->
-          {acc_links, acc_streams}
-      end
+    Enum.reduce(input_streams, {links, %{}}, fn {key, stream}, {acc_links, acc_streams} ->
+      inject_one(acc_links, acc_streams, key, stream)
     end)
+  end
+
+  defp inject_one(links, streams, {coord, port} = key, [val | rest]) do
+    idx = Enum.find_index(links, fn l -> l.to == {coord, port} end)
+    do_inject(links, streams, key, idx, val, rest)
+  end
+
+  defp inject_one(links, streams, _key, _stream), do: {links, streams}
+
+  defp do_inject(links, streams, _key, nil, _val, _rest), do: {links, streams}
+
+  defp do_inject(links, streams, key, idx, val, rest) do
+    link = Enum.at(links, idx)
+
+    case ExSystolic.Link.write(link, val) do
+      {:ok, new_link} ->
+        new_links = List.replace_at(links, idx, new_link)
+        new_streams = if rest == [], do: streams, else: Map.put(streams, key, rest)
+        {new_links, new_streams}
+
+      {:error, :full} ->
+        {links, Map.put(streams, key, [val | rest])}
+    end
   end
 
   defp read_all_links(links, input_ports) do

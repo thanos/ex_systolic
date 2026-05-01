@@ -19,7 +19,7 @@ defmodule ExSystolic.Link do
   deterministic.
   """
 
-  @type coord :: {non_neg_integer(), non_neg_integer()}
+  @type coord :: {integer(), integer()}
   @type port_name :: atom()
   @type endpoint :: {coord(), port_name()}
 

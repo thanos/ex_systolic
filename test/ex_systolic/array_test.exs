@@ -52,11 +52,7 @@ defmodule ExSystolic.ArrayTest do
         |> Array.connect(:west_to_east)
         |> Array.connect(:north_to_south)
 
-      we_boundary = 2
-      we_internal = 2 * 1
-      ns_boundary = 2
-      ns_internal = 1 * 2
-      assert length(array.links) == we_boundary + we_internal + ns_boundary + ns_internal
+      assert length(array.links) == 8
     end
 
     test "boundary links for west input target column 0" do

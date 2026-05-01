@@ -1,5 +1,6 @@
 defmodule ExSystolic.PE.MACTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias ExSystolic.PE.MAC
 
@@ -85,6 +86,44 @@ defmodule ExSystolic.PE.MACTest do
     test "MAC implements ExSystolic.PE callbacks" do
       assert function_exported?(MAC, :init, 1)
       assert function_exported?(MAC, :step, 4)
+    end
+  end
+
+  describe "properties" do
+    property "acc = acc + a * b for any integers" do
+      check all a <- integer(),
+                b <- integer(),
+                acc0 <- integer() do
+        {new_acc, outputs} = MAC.step(acc0, %{west: a, north: b}, 0, %{})
+        assert new_acc == acc0 + a * b
+        assert outputs.result == acc0 + a * b
+      end
+    end
+
+    property "east always equals west input when present" do
+      check all a <- integer(), b <- integer() do
+        {_, outputs} = MAC.step(0, %{west: a, north: b}, 0, %{})
+        assert outputs.east == a
+      end
+    end
+
+    property "south always equals north input when present" do
+      check all a <- integer(), b <- integer() do
+        {_, outputs} = MAC.step(0, %{west: a, north: b}, 0, %{})
+        assert outputs.south == b
+      end
+    end
+
+    property "accumulation over multiple steps is additive" do
+      check all pairs <- list_of({integer(), integer()}, max_length: 20) do
+        final_acc =
+          Enum.reduce(Enum.with_index(pairs), 0, fn {{a, b}, tick}, acc ->
+            {new_acc, _} = MAC.step(acc, %{west: a, north: b}, tick, %{})
+            new_acc
+          end)
+        expected = Enum.reduce(pairs, 0, fn {a, b}, acc -> acc + a * b end)
+        assert final_acc == expected
+      end
     end
   end
 end

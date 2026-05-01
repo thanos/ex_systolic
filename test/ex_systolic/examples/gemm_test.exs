@@ -1,5 +1,6 @@
 defmodule ExSystolic.Examples.GEMMTest do
   use ExUnit.Case, async: true
+  use ExUnitProperties
 
   alias ExSystolic.Examples.GEMM
 
@@ -95,6 +96,35 @@ defmodule ExSystolic.Examples.GEMMTest do
       result1 = GEMM.run(a, b)
       result2 = GEMM.run(a, b)
       assert result1 == result2
+    end
+  end
+
+  describe "properties" do
+    property "GEMM result matches reference multiplication for 2x2 matrices" do
+      check all a00 <- integer(-10..10),
+                a01 <- integer(-10..10),
+                a10 <- integer(-10..10),
+                a11 <- integer(-10..10),
+                b00 <- integer(-10..10),
+                b01 <- integer(-10..10),
+                b10 <- integer(-10..10),
+                b11 <- integer(-10..10) do
+        a = [[a00, a01], [a10, a11]]
+        b = [[b00, b01], [b10, b11]]
+        result = GEMM.run(a, b)
+        expected = [
+          [a00 * b00 + a01 * b10, a00 * b01 + a01 * b11],
+          [a10 * b00 + a11 * b10, a10 * b01 + a11 * b11]
+        ]
+        assert result == expected
+      end
+    end
+
+    property "GEMM is deterministic for any valid matrix" do
+      check all a <- list_of(list_of(integer(-5..5), length: 2), length: 2),
+                b <- list_of(list_of(integer(-5..5), length: 2), length: 2) do
+        assert GEMM.run(a, b) == GEMM.run(a, b)
+      end
     end
   end
 end

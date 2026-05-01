@@ -20,7 +20,14 @@ defmodule ExSystolic.TraceTest do
   describe "record/2" do
     test "appends event to trace" do
       trace = Trace.new()
-      event = %Event{tick: 0, coord: {0, 0}, inputs: %{west: 3}, outputs: %{result: 12}, state_before: 0, state_after: 12}
+      event = %Event{
+        tick: 0,
+        coord: {0, 0},
+        inputs: %{west: 3},
+        outputs: %{result: 12},
+        state_before: 0,
+        state_after: 12
+      }
       trace2 = Trace.record(trace, event)
       assert length(trace2.events) == 1
       assert hd(trace2.events).tick == 0
@@ -41,9 +48,9 @@ defmodule ExSystolic.TraceTest do
       e1 = %Event{tick: 1, coord: {0, 0}, inputs: %{}, outputs: %{}, state_before: 0, state_after: 0}
       e2 = %Event{tick: 1, coord: {1, 0}, inputs: %{}, outputs: %{}, state_before: 0, state_after: 0}
       trace = Trace.new([e0, e1, e2])
-      assert length(Trace.at(trace, 0)) == 1
-      assert length(Trace.at(trace, 1)) == 2
-      assert length(Trace.at(trace, 5)) == 0
+      assert [_e0] = Trace.at(trace, 0)
+      assert [_e0, _e1] = Trace.at(trace, 1)
+      assert [] = Trace.at(trace, 5)
     end
   end
 

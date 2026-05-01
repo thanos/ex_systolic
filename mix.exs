@@ -8,7 +8,11 @@ defmodule ExSystolic.MixProject do
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      test_coverage: [tool: ExCoveralls]
+      test_coverage: [tool: ExCoveralls],
+      dialyzer: [
+        plt_local_path: "priv/plts/local.plt",
+        plt_core_path: "priv/plts/core.plt"
+      ]
     ]
   end
 
@@ -31,7 +35,12 @@ defmodule ExSystolic.MixProject do
 
   defp deps do
     [
-      {:excoveralls, "~> 0.18", only: :test}
+      {:ex_doc, "~> 0.37", only: :dev, runtime: false},
+      {:credo, "~> 1.7", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: :dev, runtime: false},
+      {:excoveralls, "~> 0.18", only: :test},
+      {:stream_data, "~> 1.2", only: [:test, :dev]},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 end

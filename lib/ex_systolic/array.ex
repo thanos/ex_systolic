@@ -150,47 +150,51 @@ defmodule ExSystolic.Array do
   """
   @spec connect(t(), :west_to_east | :north_to_south) :: t()
   def connect(%{grid: grid, links: links} = array, direction) do
-    new_links =
-      case direction do
-        :west_to_east ->
-          boundary =
-            for r <- 0..(grid.rows - 1) do
-              Link.new({{-1, r}, :east}, {{r, 0}, :west})
-            end
-
-          internal =
-            if grid.cols > 1 do
-              for r <- 0..(grid.rows - 1),
-                  c <- 0..(grid.cols - 2) do
-                Link.new({{r, c}, :east}, {{r, c + 1}, :west})
-              end
-            else
-              []
-            end
-
-          boundary ++ internal
-
-        :north_to_south ->
-          boundary =
-            for c <- 0..(grid.cols - 1) do
-              Link.new({{c, -1}, :south}, {{0, c}, :north})
-            end
-
-          internal =
-            if grid.rows > 1 do
-              for r <- 0..(grid.rows - 2),
-                  c <- 0..(grid.cols - 1) do
-                Link.new({{r, c}, :south}, {{r + 1, c}, :north})
-              end
-            else
-              []
-            end
-
-          boundary ++ internal
-      end
-
+    new_links = build_direction_links(grid, direction)
     %{array | links: links ++ new_links}
   end
+
+  defp build_direction_links(grid, :west_to_east) do
+    boundary = west_boundary_links(grid)
+    internal = west_east_internal_links(grid)
+    boundary ++ internal
+  end
+
+  defp build_direction_links(grid, :north_to_south) do
+    boundary = north_boundary_links(grid)
+    internal = north_south_internal_links(grid)
+    boundary ++ internal
+  end
+
+  defp west_boundary_links(grid) do
+    for r <- 0..(grid.rows - 1) do
+      Link.new({{-1, r}, :east}, {{r, 0}, :west})
+    end
+  end
+
+  defp west_east_internal_links(grid) when grid.cols > 1 do
+    for r <- 0..(grid.rows - 1),
+        c <- 0..(grid.cols - 2) do
+      Link.new({{r, c}, :east}, {{r, c + 1}, :west})
+    end
+  end
+
+  defp west_east_internal_links(_grid), do: []
+
+  defp north_boundary_links(grid) do
+    for c <- 0..(grid.cols - 1) do
+      Link.new({{c, -1}, :south}, {{0, c}, :north})
+    end
+  end
+
+  defp north_south_internal_links(grid) when grid.rows > 1 do
+    for r <- 0..(grid.rows - 2),
+        c <- 0..(grid.cols - 1) do
+      Link.new({{r, c}, :south}, {{r + 1, c}, :north})
+    end
+  end
+
+  defp north_south_internal_links(_grid), do: []
 
   @doc """
   Attaches external input streams to the array.

@@ -147,53 +147,58 @@ defmodule ExSystolic.Backend.Interpreted do
         ) ::
           {[Link.t()], %{{ExSystolic.Grid.coord(), atom()} => [term()]}}
   def write_outputs(links, tick_outputs, input_streams) do
-    updated_links =
-      Enum.reduce(tick_outputs, links, fn {coord, outputs}, acc_links ->
-        Enum.reduce(outputs, acc_links, fn {port, value}, inner_links ->
-          from_key = {coord, port}
-          idx = Enum.find_index(inner_links, &(&1.from == from_key))
-
-          if idx do
-            link = Enum.at(inner_links, idx)
-            case Link.write(link, value) do
-              {:ok, new_link} -> List.replace_at(inner_links, idx, new_link)
-              {:error, :full} -> inner_links
-            end
-          else
-            inner_links
-          end
-        end)
-      end)
-
+    updated_links = Enum.reduce(tick_outputs, links, &write_pe_outputs/2)
     {updated_links, remaining_streams} = inject_inputs(updated_links, input_streams)
-
     {updated_links, remaining_streams}
   end
 
-  defp inject_inputs(links, input_streams) do
-    Enum.reduce(input_streams, {links, %{}}, fn {{coord, port} = key, stream}, {acc_links, acc_streams} ->
-      idx = Enum.find_index(acc_links, &(&1.to == {coord, port}))
-
-      case {stream, idx} do
-        {[val | rest], i} when i != nil ->
-          link = Enum.at(acc_links, i)
-          case Link.write(link, val) do
-            {:ok, new_link} ->
-              new_links = List.replace_at(acc_links, i, new_link)
-              new_streams = if rest == [], do: acc_streams, else: Map.put(acc_streams, key, rest)
-              {new_links, new_streams}
-
-            {:error, :full} ->
-              {acc_links, Map.put(acc_streams, key, stream)}
-          end
-
-        {[], _} ->
-          {acc_links, acc_streams}
-
-        {_, nil} ->
-          {acc_links, acc_streams}
-      end
+  defp write_pe_outputs({coord, outputs}, acc_links) do
+    Enum.reduce(outputs, acc_links, fn {port, value}, links ->
+      write_to_link(links, {coord, port}, value)
     end)
+  end
+
+  defp write_to_link(links, from_key, value) do
+    idx = Enum.find_index(links, &(&1.from == from_key))
+
+    if idx do
+      link = Enum.at(links, idx)
+      case Link.write(link, value) do
+        {:ok, new_link} -> List.replace_at(links, idx, new_link)
+        {:error, :full} -> links
+      end
+    else
+      links
+    end
+  end
+
+  defp inject_inputs(links, input_streams) do
+    Enum.reduce(input_streams, {links, %{}}, fn {key, stream}, {acc_links, acc_streams} ->
+      inject_single_input(acc_links, acc_streams, key, stream)
+    end)
+  end
+
+  defp inject_single_input(links, streams, {coord, port} = key, [val | rest]) do
+    idx = Enum.find_index(links, &(&1.to == {coord, port}))
+    do_inject(links, streams, key, idx, val, rest)
+  end
+
+  defp inject_single_input(links, streams, _key, _stream), do: {links, streams}
+
+  defp do_inject(links, streams, _key, nil, _val, _rest), do: {links, streams}
+
+  defp do_inject(links, streams, key, idx, val, rest) do
+    link = Enum.at(links, idx)
+
+    case Link.write(link, val) do
+      {:ok, new_link} ->
+        new_links = List.replace_at(links, idx, new_link)
+        new_streams = if rest == [], do: streams, else: Map.put(streams, key, rest)
+        {new_links, new_streams}
+
+      {:error, :full} ->
+        {links, Map.put(streams, key, [val | rest])}
+    end
   end
 
   @doc """
