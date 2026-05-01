@@ -57,7 +57,9 @@ defmodule ExSystolic.Backend.Interpreted do
 
       value =
         case Map.get(link_map, key) do
-          nil -> :empty
+          nil ->
+            :empty
+
           link ->
             {val, _} = Link.read(link)
             val
@@ -93,8 +95,7 @@ defmodule ExSystolic.Backend.Interpreted do
           boolean()
         ) ::
           {%{ExSystolic.Grid.coord() => {module(), ExSystolic.PE.state()}},
-           %{ExSystolic.Grid.coord() => ExSystolic.PE.outputs()},
-           [Trace.Event.t()]}
+           %{ExSystolic.Grid.coord() => ExSystolic.PE.outputs()}, [Trace.Event.t()]}
   def execute_tick(pes, inputs_map, tick, trace_enabled) do
     Enum.reduce(pes, {%{}, %{}, []}, fn {coord, {mod, state}}, {acc_pes, acc_outs, acc_evts} ->
       pe_inputs =
@@ -107,20 +108,21 @@ defmodule ExSystolic.Backend.Interpreted do
 
       event =
         if trace_enabled do
-          [%Trace.Event{
-            tick: tick,
-            coord: coord,
-            inputs: pe_inputs,
-            outputs: pe_outputs,
-            state_before: state,
-            state_after: new_state
-          }]
+          [
+            %Trace.Event{
+              tick: tick,
+              coord: coord,
+              inputs: pe_inputs,
+              outputs: pe_outputs,
+              state_before: state,
+              state_after: new_state
+            }
+          ]
         else
           []
         end
 
-      {Map.put(acc_pes, coord, {mod, new_state}),
-       Map.put(acc_outs, coord, pe_outputs),
+      {Map.put(acc_pes, coord, {mod, new_state}), Map.put(acc_outs, coord, pe_outputs),
        acc_evts ++ event}
     end)
   end
@@ -163,6 +165,7 @@ defmodule ExSystolic.Backend.Interpreted do
 
     if idx do
       link = Enum.at(links, idx)
+
       case Link.write(link, value) do
         {:ok, new_link} -> List.replace_at(links, idx, new_link)
         {:error, :full} -> links

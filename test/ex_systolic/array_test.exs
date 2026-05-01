@@ -76,7 +76,12 @@ defmodule ExSystolic.ArrayTest do
     end
 
     test "1x1 grid still gets boundary links" do
-      array = Array.new(rows: 1, cols: 1) |> Array.fill(MAC) |> Array.connect(:west_to_east) |> Array.connect(:north_to_south)
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+
       assert length(array.links) == 2
     end
   end

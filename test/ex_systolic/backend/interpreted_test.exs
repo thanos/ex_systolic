@@ -44,7 +44,14 @@ defmodule ExSystolic.Backend.InterpretedTest do
 
     test "multiple PEs" do
       pes = %{{0, 0} => {MAC, 0}, {0, 1} => {MAC, 0}}
-      inputs = %{{{0, 0}, :west} => 2, {{0, 0}, :north} => 3, {{0, 1}, :west} => 5, {{0, 1}, :north} => 7}
+
+      inputs = %{
+        {{0, 0}, :west} => 2,
+        {{0, 0}, :north} => 3,
+        {{0, 1}, :west} => 5,
+        {{0, 1}, :north} => 7
+      }
+
       {new_pes, _outputs, _events} = Interpreted.execute_tick(pes, inputs, 0, false)
 
       assert elem(new_pes[{0, 0}], 1) == 6

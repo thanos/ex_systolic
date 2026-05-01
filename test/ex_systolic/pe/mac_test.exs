@@ -91,9 +91,11 @@ defmodule ExSystolic.PE.MACTest do
 
   describe "properties" do
     property "acc = acc + a * b for any integers" do
-      check all a <- integer(),
-                b <- integer(),
-                acc0 <- integer() do
+      check all(
+              a <- integer(),
+              b <- integer(),
+              acc0 <- integer()
+            ) do
         {new_acc, outputs} = MAC.step(acc0, %{west: a, north: b}, 0, %{})
         assert new_acc == acc0 + a * b
         assert outputs.result == acc0 + a * b
@@ -101,26 +103,27 @@ defmodule ExSystolic.PE.MACTest do
     end
 
     property "east always equals west input when present" do
-      check all a <- integer(), b <- integer() do
+      check all(a <- integer(), b <- integer()) do
         {_, outputs} = MAC.step(0, %{west: a, north: b}, 0, %{})
         assert outputs.east == a
       end
     end
 
     property "south always equals north input when present" do
-      check all a <- integer(), b <- integer() do
+      check all(a <- integer(), b <- integer()) do
         {_, outputs} = MAC.step(0, %{west: a, north: b}, 0, %{})
         assert outputs.south == b
       end
     end
 
     property "accumulation over multiple steps is additive" do
-      check all pairs <- list_of({integer(), integer()}, max_length: 20) do
+      check all(pairs <- list_of({integer(), integer()}, max_length: 20)) do
         final_acc =
           Enum.reduce(Enum.with_index(pairs), 0, fn {{a, b}, tick}, acc ->
             {new_acc, _} = MAC.step(acc, %{west: a, north: b}, tick, %{})
             new_acc
           end)
+
         expected = Enum.reduce(pairs, 0, fn {a, b}, acc -> acc + a * b end)
         assert final_acc == expected
       end

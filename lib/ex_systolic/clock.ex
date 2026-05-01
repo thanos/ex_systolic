@@ -146,8 +146,7 @@ defmodule ExSystolic.Clock do
     link_to_idx =
       for {link, idx} <- Enum.with_index(links), into: %{}, do: {link.to, idx}
 
-    Enum.reduce(input_ports, {%{}, links}, fn {_coord, _port} = key,
-                                              {acc_inputs, acc_links} ->
+    Enum.reduce(input_ports, {%{}, links}, fn {_coord, _port} = key, {acc_inputs, acc_links} ->
       idx = Map.get(link_to_idx, key)
 
       case idx do

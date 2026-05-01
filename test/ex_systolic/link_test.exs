@@ -106,7 +106,7 @@ defmodule ExSystolic.LinkTest do
 
   describe "properties" do
     property "write then read always returns the written value" do
-      check all value <- integer() do
+      check all(value <- integer()) do
         link = Link.new({{0, 0}, :east}, {{1, 0}, :west})
         {:ok, l2} = Link.write(link, value)
         {val, _} = Link.read(l2)
@@ -115,32 +115,44 @@ defmodule ExSystolic.LinkTest do
     end
 
     property "FIFO order holds for any sequence of writes" do
-      check all values <- list_of(integer(), max_length: 5) do
+      check all(values <- list_of(integer(), max_length: 5)) do
         link = Link.new({{0, 0}, :east}, {{1, 0}, :west}, capacity: 10)
-        filled = Enum.reduce(values, link, fn v, l ->
-          {:ok, l2} = Link.write(l, v)
-          l2
-        end)
-        {read_back, _} = Enum.reduce(values, {[], filled}, fn _, {acc, l} ->
-          {v, l2} = Link.read(l)
-          {acc ++ [v], l2}
-        end)
+
+        filled =
+          Enum.reduce(values, link, fn v, l ->
+            {:ok, l2} = Link.write(l, v)
+            l2
+          end)
+
+        {read_back, _} =
+          Enum.reduce(values, {[], filled}, fn _, {acc, l} ->
+            {v, l2} = Link.read(l)
+            {acc ++ [v], l2}
+          end)
+
         assert read_back == values
       end
     end
 
     property "size equals number of successful writes minus reads" do
-      check all writes <- list_of(integer(), max_length: 8),
-                reads_count <- integer(0..length(writes)) do
+      check all(
+              writes <- list_of(integer(), max_length: 8),
+              reads_count <- integer(0..length(writes))
+            ) do
         link = Link.new({{0, 0}, :east}, {{1, 0}, :west}, capacity: 20)
-        filled = Enum.reduce(writes, link, fn v, l ->
-          {:ok, l2} = Link.write(l, v)
-          l2
-        end)
-        after_reads = Enum.reduce(1..reads_count//1, filled, fn _, l ->
-          {_, l2} = Link.read(l)
-          l2
-        end)
+
+        filled =
+          Enum.reduce(writes, link, fn v, l ->
+            {:ok, l2} = Link.write(l, v)
+            l2
+          end)
+
+        after_reads =
+          Enum.reduce(1..reads_count//1, filled, fn _, l ->
+            {_, l2} = Link.read(l)
+            l2
+          end)
+
         assert Link.size(after_reads) == length(writes) - reads_count
       end
     end
