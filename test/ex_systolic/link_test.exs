@@ -90,6 +90,22 @@ defmodule ExSystolic.LinkTest do
     end
   end
 
+  describe "tick/1" do
+    test "returns link unchanged for latency 1" do
+      link = Link.new({{0, 0}, :east}, {{1, 0}, :west})
+      assert Link.tick(link) == link
+    end
+
+    test "tick preserves buffer contents" do
+      link = Link.new({{0, 0}, :east}, {{1, 0}, :west})
+      {:ok, l1} = Link.write(link, 42)
+      ticked = Link.tick(l1)
+      assert Link.size(ticked) == 1
+      {:ok, val} = Link.peek(ticked)
+      assert val == 42
+    end
+  end
+
   describe "determinism" do
     test "identical links produce identical behaviour" do
       link1 = Link.new({{0, 0}, :east}, {{1, 0}, :west})

@@ -32,6 +32,24 @@ defmodule ExSystolic.ClockTest do
       assert result.tick == 5
     end
 
+    test "run with ticks: 0 returns unchanged array" do
+      array = Array.new(rows: 1, cols: 1) |> Array.fill(MAC)
+      result = Clock.run(array, ticks: 0)
+      assert result.tick == 0
+    end
+
+    test "run with backend: :partitioned delegates to Partitioned" do
+      array =
+        Array.new(rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+
+      interp = Clock.run(array, ticks: 2)
+      part = Clock.run(array, ticks: 2, backend: :partitioned)
+      assert Array.result_matrix(interp) == Array.result_matrix(part)
+    end
+
     test "tick determinism: same inputs produce same outputs" do
       build_array = fn ->
         Array.new(rows: 2, cols: 2)
@@ -84,6 +102,73 @@ defmodule ExSystolic.ClockTest do
       result = Clock.step(array)
       {_mod, state} = result.pes[{0, 0}]
       assert state == 15
+    end
+  end
+
+  describe "edge cases" do
+    test "inject skips when input stream is empty" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+        |> Array.input(:west, [{{0, 0}, []}])
+
+      result = Clock.step(array)
+      assert result.tick == 1
+    end
+
+    test "inject skips when no matching link exists" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+        |> Array.input(:west, [{{99, 99}, [10]}])
+
+      result = Clock.step(array)
+      {_mod, state} = result.pes[{0, 0}]
+      assert state == 0
+    end
+
+    test "inject defers when link is already full" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, [{{0, 0}, [3]}])
+        |> Array.input(:north, [{{0, 0}, [4]}])
+
+      after_tick1 = Clock.step(array)
+
+      {:ok, full_link} =
+        ExSystolic.Link.write(
+          Enum.find(after_tick1.links, &(&1.to == {{0, 0}, :west})),
+          99
+        )
+
+      pre_filled = %{
+        after_tick1
+        | links:
+            Enum.map(after_tick1.links, fn l ->
+              if l.to == {{0, 0}, :west}, do: full_link, else: l
+            end),
+          input_streams: %{{{0, 0}, :west} => [100, 101]}
+      }
+
+      result = Clock.step(pre_filled)
+      remaining = result.input_streams[{{0, 0}, :west}]
+      assert remaining != []
+    end
+
+    test "inject skips when input stream is empty list" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, [{{0, 0}, []}])
+
+      result = Clock.step(array)
+      {_mod, state} = result.pes[{0, 0}]
+      assert state == 0
     end
   end
 

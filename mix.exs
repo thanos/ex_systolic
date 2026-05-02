@@ -22,6 +22,9 @@ defmodule ExSystolic.MixProject do
       dialyzer: [
         plt_local_path: "priv/plts/local.plt",
         plt_core_path: "priv/plts/core.plt"
+      ],
+      aliases: [
+        "test.ci": &test_ci/1
       ]
     ]
   end
@@ -39,7 +42,8 @@ defmodule ExSystolic.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      mod: {ExSystolic.Application, []}
     ]
   end
 
@@ -80,7 +84,15 @@ defmodule ExSystolic.MixProject do
           ExSystolic.Space.Grid2D
         ],
         "Processing Elements": [ExSystolic.PE.MAC],
-        Backends: [ExSystolic.Backend.Interpreted],
+        Backends: [
+          ExSystolic.Backend.Interpreted,
+          ExSystolic.Backend.Partitioned,
+          ExSystolic.Backend.PoolexWorker
+        ],
+        Tiles: [
+          ExSystolic.Tile,
+          ExSystolic.TilePartitioner
+        ],
         Examples: [ExSystolic.Examples.GEMM]
       ]
     ]
@@ -93,7 +105,44 @@ defmodule ExSystolic.MixProject do
       {:dialyxir, "~> 1.4", only: :dev, runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
       {:stream_data, "~> 1.2", only: [:test, :dev]},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:poolex, "~> 1.2"}
     ]
+  end
+
+  defp test_ci(_) do
+    steps = [
+      # ["precommit", :dev],
+      {"compile --warnings-as-errors", :dev},
+      {"format --check-formatted", :dev},
+      {"credo --strict", :dev},
+      # {"sobelow --config", :dev},
+      {"dialyzer", :dev},
+      {"test --cover", :test},
+      {"docs --warnings-as-errors", :dev}
+    ]
+
+    Enum.each(steps, fn {task, env} ->
+      Mix.shell().info(IO.ANSI.format([:bright, "==> mix #{task}", :reset]))
+
+      mix_executable =
+        System.find_executable("mix") ||
+          Mix.raise("Could not find `mix` executable on PATH")
+
+      {_, exit_code} =
+        System.cmd(mix_executable, String.split(task),
+          env: [{"MIX_ENV", to_string(env)}],
+          into: IO.stream(:stdio, :line),
+          stderr_to_stdout: true
+        )
+
+      if exit_code != 0 do
+        Mix.raise("mix #{task} failed (exit code #{exit_code})")
+      end
+    end)
+
+    Mix.shell().info(
+      IO.ANSI.format([:green, :bright, "\nAll verification checks passed!", :reset])
+    )
   end
 end

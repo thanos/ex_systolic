@@ -2,24 +2,38 @@ defmodule ExSystolic.Clock do
   @moduledoc """
   The clock drives systolic array execution tick by tick.
 
-  The clock is the orchestrator: it calls the interpreted backend's
-  tick sequence (read, execute, write, record) in strict order, for
-  as many ticks as requested.
+  The clock is the orchestrator: it delegates to the selected backend's
+  tick sequence in strict order, for as many ticks as requested.
+
+  ## Backend selection
+
+  By default, the interpreted (single-process) backend is used.  You can
+  select the partitioned (tile-based parallel) backend via the `:backend`
+  option:
+
+      # Interpreted (default)
+      Clock.run(array, ticks: 10)
+
+      # Partitioned
+      Clock.run(array, ticks: 10, backend: :partitioned, tile_rows: 4, tile_cols: 4)
+
+  Both backends produce **identical results** for the same inputs.
 
   ## Determinism
 
-  Because the interpreted backend is purely functional and the clock
-  does not introduce any non-determinism (no concurrency, no random
-  scheduling), running `Clock.run(array, ticks: n)` always produces the
-  same result for the same inputs.
+  Because the interpreted backend is purely functional and the partitioned
+  backend uses BSP barriers (no interleaving between compute and
+  communication), running `Clock.run(array, ticks: n)` always produces
+  the same result for the same inputs, regardless of backend choice.
 
   ## API
 
   - `run/2` -- execute N ticks
-  - `step/1` -- execute exactly one tick
+  - `step/1` -- execute exactly one tick (interpreted only)
   """
 
   alias ExSystolic.Backend.Interpreted
+  alias ExSystolic.Backend.Partitioned
   alias ExSystolic.Trace
 
   @doc """
@@ -27,6 +41,13 @@ defmodule ExSystolic.Clock do
 
   Returns the final array state, which includes the updated PEs, links,
   tick counter, and trace.
+
+  ## Options
+
+  - `:ticks` -- number of ticks (required)
+  - `:backend` -- `:interpreted` (default) or `:partitioned`
+  - `:tile_rows` -- rows per tile (partitioned only)
+  - `:tile_cols` -- cols per tile (partitioned only)
 
   ## Examples
 
@@ -41,12 +62,20 @@ defmodule ExSystolic.Clock do
   """
   @spec run(ExSystolic.Array.t(), keyword()) :: ExSystolic.Array.t()
   def run(array, opts) do
-    ticks = Keyword.fetch!(opts, :ticks)
-    Enum.reduce(1..ticks//1, array, fn _, acc -> step(acc) end)
+    backend = Keyword.get(opts, :backend, :interpreted)
+
+    case backend do
+      :interpreted ->
+        ticks = Keyword.fetch!(opts, :ticks)
+        Enum.reduce(1..ticks//1, array, fn _, acc -> step(acc) end)
+
+      :partitioned ->
+        Partitioned.run(array, opts)
+    end
   end
 
   @doc """
-  Executes a single tick of the array.
+  Executes a single tick of the array using the interpreted backend.
 
   Follows the strict order:
   1. INJECT external input streams into boundary link buffers
@@ -80,8 +109,6 @@ defmodule ExSystolic.Clock do
 
     {links_after_inject, remaining_streams} = inject_inputs(links, input_streams)
 
-    # Derive input ports from the current link endpoints so that custom
-    # spaces with different port names are supported.
     input_ports =
       links_after_inject
       |> Enum.map(& &1.to)

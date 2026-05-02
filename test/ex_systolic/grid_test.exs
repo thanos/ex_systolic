@@ -9,6 +9,14 @@ defmodule ExSystolic.GridTest do
       assert grid.rows == 3
       assert grid.cols == 4
     end
+
+    test "raises on zero rows" do
+      assert_raise ArgumentError, fn -> Grid.rect(rows: 0, cols: 2) end
+    end
+
+    test "raises on zero cols" do
+      assert_raise ArgumentError, fn -> Grid.rect(rows: 2, cols: 0) end
+    end
   end
 
   describe "neighbour lookups" do
