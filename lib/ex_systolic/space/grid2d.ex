@@ -18,6 +18,17 @@ defmodule ExSystolic.Space.Grid2D do
   `:east`, `:west`.  Boundary PEs have `nil` neighbours on their
   outward-facing ports.
 
+  ## Link directions
+
+  Grid2D supports two `connect/2` directions:
+
+  - `:west_to_east` -- links flow eastward: boundary links enter column 0
+    via the `:west` port, internal links connect column *c* (`:east`)
+    to column *c+1* (`:west`).
+  - `:north_to_south` -- links flow southward: boundary links enter row 0
+    via the `:north` port, internal links connect row *r* (`:south`)
+    to row *r+1* (`:north`).
+
   ## Relationship to ExSystolic.Grid
 
   `Grid2D` and `Grid` share the same coordinate semantics.  `Grid`
@@ -26,6 +37,8 @@ defmodule ExSystolic.Space.Grid2D do
   """
 
   @behaviour ExSystolic.Space
+
+  alias ExSystolic.Link
 
   @type coord :: {non_neg_integer(), non_neg_integer()}
 
@@ -118,6 +131,82 @@ defmodule ExSystolic.Space.Grid2D do
   def coords(opts) do
     rows = Keyword.fetch!(opts, :rows)
     cols = Keyword.fetch!(opts, :cols)
-    for r <- 0..(rows - 1), c <- 0..(cols - 1), do: {r, c}
+    for r <- 0..(rows - 1)//1, c <- 0..(cols - 1)//1, do: {r, c}
   end
+
+  @doc """
+  Returns boundary and internal links for a Grid2D direction.
+
+  ## Directions
+
+  - `:west_to_east` -- boundary links enter column 0 from the west;
+    internal links connect each column's `:east` to the next column's
+    `:west`.
+  - `:north_to_south` -- boundary links enter row 0 from the north;
+    internal links connect each row's `:south` to the next row's
+    `:north`.
+
+  Returns an empty list for unrecognized directions.
+
+  ## Examples
+
+      iex> ExSystolic.Space.Grid2D.links([rows: 2, cols: 2], :west_to_east) |> length()
+      4
+      iex> ExSystolic.Space.Grid2D.links([rows: 2, cols: 2], :west_to_east) |> Enum.any?(&(&1.from == {{0, -1}, :east}))
+      true
+
+      iex> ExSystolic.Space.Grid2D.links([rows: 2, cols: 2], :north_to_south) |> length()
+      4
+
+      iex> ExSystolic.Space.Grid2D.links([rows: 1, cols: 1], :unknown)
+      []
+
+  """
+  @impl true
+  @spec links(keyword(), atom()) :: [Link.t()]
+  def links(opts, :west_to_east) do
+    rows = Keyword.fetch!(opts, :rows)
+    cols = Keyword.fetch!(opts, :cols)
+
+    boundary =
+      for r <- 0..(rows - 1)//1 do
+        Link.new({{r, -1}, :east}, {{r, 0}, :west})
+      end
+
+    internal =
+      if cols > 1 do
+        for r <- 0..(rows - 1)//1,
+            c <- 0..(cols - 2)//1 do
+          Link.new({{r, c}, :east}, {{r, c + 1}, :west})
+        end
+      else
+        []
+      end
+
+    boundary ++ internal
+  end
+
+  def links(opts, :north_to_south) do
+    rows = Keyword.fetch!(opts, :rows)
+    cols = Keyword.fetch!(opts, :cols)
+
+    boundary =
+      for c <- 0..(cols - 1)//1 do
+        Link.new({{-1, c}, :south}, {{0, c}, :north})
+      end
+
+    internal =
+      if rows > 1 do
+        for r <- 0..(rows - 2)//1,
+            c <- 0..(cols - 1)//1 do
+          Link.new({{r, c}, :south}, {{r + 1, c}, :north})
+        end
+      else
+        []
+      end
+
+    boundary ++ internal
+  end
+
+  def links(_opts, _direction), do: []
 end

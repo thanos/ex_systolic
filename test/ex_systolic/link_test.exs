@@ -4,6 +4,8 @@ defmodule ExSystolic.LinkTest do
 
   alias ExSystolic.Link
 
+  doctest Link
+
   describe "new/3" do
     test "creates a link with default latency and capacity" do
       link = Link.new({{0, 0}, :east}, {{1, 0}, :west})
@@ -171,6 +173,50 @@ defmodule ExSystolic.LinkTest do
 
         assert Link.size(after_reads) == length(writes) - reads_count
       end
+    end
+
+    property "interleaved writes and reads preserve FIFO order" do
+      check all(values <- list_of(integer(), min_length: 2, max_length: 10)) do
+        link = Link.new({{0, 0}, :east}, {{1, 0}, :west}, capacity: 20)
+
+        {result, _final_link} =
+          Enum.reduce(values, {[], link}, fn v, {acc, l} ->
+            {:ok, l2} = Link.write(l, v)
+            {v2, l3} = Link.read(l2)
+            {acc ++ [v2], l3}
+          end)
+
+        assert result == values
+      end
+    end
+  end
+
+  describe "capacity > 1" do
+    test "buffer holds multiple values in FIFO order" do
+      link = Link.new({{0, 0}, :east}, {{1, 0}, :west}, capacity: 5)
+
+      link =
+        Enum.reduce([10, 20, 30], link, fn v, l ->
+          {:ok, l2} = Link.write(l, v)
+          l2
+        end)
+
+      assert Link.size(link) == 3
+
+      {v1, link} = Link.read(link)
+      assert v1 == 10
+      {v2, link} = Link.read(link)
+      assert v2 == 20
+      {v3, _link} = Link.read(link)
+      assert v3 == 30
+    end
+
+    test "write returns :full when buffer reaches capacity" do
+      link = Link.new({{0, 0}, :east}, {{1, 0}, :west}, capacity: 2)
+
+      {:ok, link} = Link.write(link, 1)
+      {:ok, link} = Link.write(link, 2)
+      assert {:error, :full} = Link.write(link, 3)
     end
   end
 end

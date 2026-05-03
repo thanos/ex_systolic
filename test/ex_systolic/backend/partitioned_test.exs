@@ -3,6 +3,8 @@ defmodule ExSystolic.Backend.PartitionedTest do
 
   alias ExSystolic.{Array, Backend.Partitioned, Clock, Examples.GEMM, PE.MAC}
 
+  doctest ExSystolic.Backend.Partitioned
+
   describe "run/2" do
     test "runs array for given number of ticks" do
       array =
@@ -111,6 +113,27 @@ defmodule ExSystolic.Backend.PartitionedTest do
         end
 
       assert Enum.uniq(results) == [hd(results)]
+    end
+
+    test "full PE state parity with interpreted backend (beyond result_matrix)" do
+      a = [[1, 2], [3, 4]]
+      b = [[5, 6], [7, 8]]
+
+      array =
+        Array.new(rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, GEMM.west_streams(a, 2, 2, 2))
+        |> Array.input(:north, GEMM.north_streams(b, 2, 2, 2))
+
+      interp = Clock.run(%{array | pes: array.pes}, ticks: 5, backend: :interpreted)
+      part = Partitioned.run(array, ticks: 5)
+
+      interp_states = for {coord, {_, s}} <- interp.pes, into: %{}, do: {coord, s}
+      part_states = for {coord, {_, s}} <- part.pes, into: %{}, do: {coord, s}
+
+      assert interp_states == part_states
     end
   end
 
@@ -247,6 +270,43 @@ defmodule ExSystolic.Backend.PartitionedTest do
         |> Array.result_matrix()
 
       assert interpreted == partitioned
+    end
+
+    test "Clock.run with dispatch: :pool produces same result as :interpreted" do
+      a = [[1, 2], [3, 4]]
+      b = [[5, 6], [7, 8]]
+
+      interpreted =
+        Array.new(rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, GEMM.west_streams(a, 2, 2, 2))
+        |> Array.input(:north, GEMM.north_streams(b, 2, 2, 2))
+        |> Clock.run(ticks: 5, backend: :interpreted)
+        |> Array.result_matrix()
+
+      pooled =
+        Array.new(rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, GEMM.west_streams(a, 2, 2, 2))
+        |> Array.input(:north, GEMM.north_streams(b, 2, 2, 2))
+        |> Clock.run(ticks: 5, backend: :partitioned, dispatch: :pool)
+        |> Array.result_matrix()
+
+      assert interpreted == pooled
+    end
+
+    test "invalid dispatch strategy raises ArgumentError" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+
+      assert_raise ArgumentError, ~r/unknown dispatch strategy/, fn ->
+        Partitioned.run(array, ticks: 1, dispatch: :bad)
+      end
     end
   end
 end

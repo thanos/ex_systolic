@@ -83,26 +83,14 @@ defmodule ExSystolic.PE.MAC do
     a = Map.get(inputs, :west)
     b = Map.get(inputs, :north)
 
-    a_val = if is_nil(a) or a == :empty, do: 0, else: a
-    b_val = if is_nil(b) or b == :empty, do: 0, else: b
+    a_val = ExSystolic.PE.value(a, 0)
+    b_val = ExSystolic.PE.value(b, 0)
 
     new_acc = acc + a_val * b_val
 
     outputs = %{result: new_acc}
-
-    outputs =
-      if not is_nil(a) and a != :empty do
-        Map.put(outputs, :east, a)
-      else
-        outputs
-      end
-
-    outputs =
-      if not is_nil(b) and b != :empty do
-        Map.put(outputs, :south, b)
-      else
-        outputs
-      end
+    outputs = if ExSystolic.PE.present?(a), do: Map.put(outputs, :east, a), else: outputs
+    outputs = if ExSystolic.PE.present?(b), do: Map.put(outputs, :south, b), else: outputs
 
     {new_acc, outputs}
   end

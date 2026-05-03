@@ -20,9 +20,12 @@ defmodule ExSystolic.TilePartitioner do
 
   - The grid is divided into `ceil(rows/tr) x ceil(cols/tc)` tiles
   - Edge tiles may be smaller than `tr x tc`
-  - Each tile owns the PEs and internal links within its bounds
-  - Links crossing tile boundaries are assigned to the tile that
-    contains the `from` endpoint
+  - Each tile owns the PEs and **internal** links within its bounds
+  - A link is **internal** to a tile when both its `from` and `to`
+    endpoints are coordinates within that tile
+  - Links crossing tile boundaries (where one endpoint is in a
+    different tile) are **not** assigned to any tile; they are managed
+    globally by the partitioned backend's BSP read/write cycle
 
   ## Examples
 
@@ -65,13 +68,22 @@ defmodule ExSystolic.TilePartitioner do
     tile_rows = Keyword.get(opts, :tile_rows, rows)
     tile_cols = Keyword.get(opts, :tile_cols, cols)
 
-    row_chunks = Enum.chunk_every(0..(rows - 1), tile_rows)
-    col_chunks = Enum.chunk_every(0..(cols - 1), tile_cols)
+    validate_tile_dim!(:tile_rows, tile_rows)
+    validate_tile_dim!(:tile_cols, tile_cols)
+
+    row_chunks = Enum.chunk_every(0..(rows - 1)//1, tile_rows)
+    col_chunks = Enum.chunk_every(0..(cols - 1)//1, tile_cols)
 
     for row_chunk <- row_chunks,
         col_chunk <- col_chunks do
       build_tile(array, row_chunk, col_chunk)
     end
+  end
+
+  defp validate_tile_dim!(_name, n) when is_integer(n) and n > 0, do: :ok
+
+  defp validate_tile_dim!(name, n) do
+    raise ArgumentError, "#{name} must be a positive integer, got #{inspect(n)}"
   end
 
   defp build_tile(array, row_chunk, col_chunk) do
@@ -82,28 +94,19 @@ defmodule ExSystolic.TilePartitioner do
       end
 
     coord_set = MapSet.new(coords)
-
     pes = Map.take(array.pes, coords)
 
-    {local_links, boundary_links} =
-      Enum.split_with(array.links, fn link ->
-        from_in = MapSet.member?(coord_set, elem(link.from, 0))
-        to_in = MapSet.member?(coord_set, elem(link.to, 0))
-        from_in and to_in
+    local_links =
+      Enum.filter(array.links, fn link ->
+        MapSet.member?(coord_set, elem(link.from, 0)) and
+          MapSet.member?(coord_set, elem(link.to, 0))
       end)
-
-    boundary_inputs =
-      for link <- boundary_links,
-          into: %{} do
-        {link.to, :empty}
-      end
 
     %Tile{
       id: {hd(row_chunk), hd(col_chunk)},
       coords: coords,
       pes: pes,
-      links: local_links,
-      boundary_inputs: boundary_inputs
+      links: local_links
     }
   end
 end

@@ -74,5 +74,35 @@ defmodule ExSystolic.TilePartitionerTest do
       all_coords = Enum.flat_map(tiles, & &1.coords)
       assert length(all_coords) == 9
     end
+
+    test "tile_rows larger than array rows produces single tile" do
+      array = Array.new(rows: 2, cols: 2) |> Array.fill(MAC)
+      tiles = TilePartitioner.partition(array, tile_rows: 10, tile_cols: 10)
+      assert length(tiles) == 1
+    end
+
+    test "tile_rows of 0 raises ArgumentError" do
+      array = Array.new(rows: 2, cols: 2) |> Array.fill(MAC)
+
+      assert_raise ArgumentError, fn ->
+        TilePartitioner.partition(array, tile_rows: 0, tile_cols: 2)
+      end
+    end
+
+    test "tile_cols of 0 raises ArgumentError" do
+      array = Array.new(rows: 2, cols: 2) |> Array.fill(MAC)
+
+      assert_raise ArgumentError, fn ->
+        TilePartitioner.partition(array, tile_rows: 2, tile_cols: 0)
+      end
+    end
+
+    test "negative tile_rows raises ArgumentError" do
+      array = Array.new(rows: 2, cols: 2) |> Array.fill(MAC)
+
+      assert_raise ArgumentError, fn ->
+        TilePartitioner.partition(array, tile_rows: -1, tile_cols: 2)
+      end
+    end
   end
 end

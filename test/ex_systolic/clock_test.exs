@@ -202,4 +202,30 @@ defmodule ExSystolic.ClockTest do
       assert result.trace.events == []
     end
   end
+
+  describe "error handling" do
+    test "missing :ticks raises KeyError" do
+      array = Array.new(rows: 1, cols: 1) |> Array.fill(MAC)
+
+      assert_raise KeyError, fn ->
+        Clock.run(array, [])
+      end
+    end
+
+    test "invalid backend raises ArgumentError" do
+      array = Array.new(rows: 1, cols: 1) |> Array.fill(MAC)
+
+      assert_raise ArgumentError, ~r/unknown backend/, fn ->
+        Clock.run(array, ticks: 1, backend: :nonexistent)
+      end
+    end
+  end
+
+  describe "edge case: empty PEs" do
+    test "step on array with no PEs and no links advances tick" do
+      array = Array.new(rows: 1, cols: 1)
+      result = Clock.step(array)
+      assert result.tick == 1
+    end
+  end
 end

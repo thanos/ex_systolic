@@ -13,7 +13,24 @@ defmodule ExSystolic.Backend.PoolexWorker do
   pool size defaults to `System.schedulers_online()`.
 
   You should not need to call this module directly; the
-  `ExSystolic.Backend.Partitioned` module dispatches work to the pool.
+  `ExSystolic.Backend.Partitioned` module dispatches work to the pool
+  when run with `dispatch: :pool`.
+
+  ## Timeout policy
+
+  The worker `handle_call/3` callback delegates to a pure function and
+  returns immediately on completion.  However, callers using
+  `GenServer.call/2` against a worker should pass `:infinity` (or a
+  generous explicit timeout) for two reasons:
+
+  1. Tile execution time is data-dependent (PE count, payload size).
+     A small default like 5000 ms can cause spurious `:timeout` exits
+     under load.
+  2. Pool checkout (separate from the call) is itself synchronous; the
+     caller controls overall responsiveness via the `checkout_timeout`
+     run option.
+
+  `ExSystolic.Backend.Partitioned` always passes `:infinity`.
   """
 
   use GenServer
@@ -28,6 +45,7 @@ defmodule ExSystolic.Backend.PoolexWorker do
     GenServer.start_link(__MODULE__, nil)
   end
 
+  @doc false
   @impl true
   def init(_args), do: {:ok, nil}
 

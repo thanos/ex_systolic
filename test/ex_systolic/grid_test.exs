@@ -3,6 +3,8 @@ defmodule ExSystolic.GridTest do
 
   alias ExSystolic.Grid
 
+  doctest Grid
+
   describe "rect/1" do
     test "creates a grid with given dimensions" do
       grid = Grid.rect(rows: 3, cols: 4)

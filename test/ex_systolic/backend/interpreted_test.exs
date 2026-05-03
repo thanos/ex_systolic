@@ -4,26 +4,6 @@ defmodule ExSystolic.Backend.InterpretedTest do
   alias ExSystolic.Backend.Interpreted
   alias ExSystolic.{Link, PE.MAC}
 
-  describe "read_inputs/2" do
-    test "reads values from link buffers" do
-      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
-      {:ok, link2} = Link.write(link, 42)
-      inputs = Interpreted.read_inputs([link2], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == 42
-    end
-
-    test "returns :empty for missing link" do
-      inputs = Interpreted.read_inputs([], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == :empty
-    end
-
-    test "returns :empty for empty buffer" do
-      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
-      inputs = Interpreted.read_inputs([link], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == :empty
-    end
-  end
-
   describe "execute_tick/4" do
     test "executes one PE step" do
       pes = %{{0, 0} => {MAC, 0}}

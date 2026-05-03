@@ -22,10 +22,28 @@ defmodule ExSystolic.Tile do
   - `:id` -- unique identifier (typically `{row_start, col_start}`)
   - `:coords` -- list of PE coordinates owned by this tile
   - `:pes` -- map of `coord => {module, state}`
-  - `:links` -- list of `Link.t()` internal to this tile (unused in
-    current simplified backend, kept for future tile-local optimization)
-  - `:boundary_inputs` -- map of `{coord, port} => value` from
-    cross-boundary links (unused in current simplified backend)
+  - `:links` -- list of `Link.t()` internal to this tile (i.e. both
+    endpoints lie within `:coords`).  Currently unused by the
+    centralized-link backend, retained as documentation for future
+    tile-local optimization.
+
+  ## Invariants
+
+  - `coord_set = MapSet.new(coords) == MapSet.new(Map.keys(pes))`
+  - Every link in `:links` has both `from` and `to` coords in
+    `coord_set`.
+
+  ## Example
+
+      iex> alias ExSystolic.{PE.MAC, Tile}
+      iex> tile = %Tile{
+      ...>   id: {0, 0},
+      ...>   coords: [{0, 0}, {0, 1}],
+      ...>   pes: %{{0, 0} => {MAC, 0}, {0, 1} => {MAC, 0}},
+      ...>   links: []
+      ...> }
+      iex> tile.id
+      {0, 0}
   """
 
   alias ExSystolic.Link
@@ -36,10 +54,9 @@ defmodule ExSystolic.Tile do
           id: id(),
           coords: [ExSystolic.Grid.coord()],
           pes: %{ExSystolic.Grid.coord() => {module(), ExSystolic.PE.state()}},
-          links: [Link.t()],
-          boundary_inputs: %{{ExSystolic.Grid.coord(), atom()} => term()}
+          links: [Link.t()]
         }
 
   @enforce_keys [:id, :coords, :pes, :links]
-  defstruct [:id, :coords, :pes, :links, boundary_inputs: %{}]
+  defstruct [:id, :coords, :pes, :links]
 end
