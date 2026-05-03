@@ -105,7 +105,7 @@ defmodule ExSystolic.Examples.GEMM do
   def west_streams(a, m, k, n) do
     total = k + m + n - 1
 
-    for i <- 0..(m - 1) do
+    for i <- 0..(m - 1)//1 do
       row = Enum.at(a, i)
       leading = List.duplicate(0, i)
       data_count = i + k
@@ -138,8 +138,8 @@ defmodule ExSystolic.Examples.GEMM do
   def north_streams(b, m, k, n) do
     total = k + m + n - 1
 
-    for j <- 0..(n - 1) do
-      col = for i <- 0..(k - 1), do: Enum.at(Enum.at(b, i), j)
+    for j <- 0..(n - 1)//1 do
+      col = for i <- 0..(k - 1)//1, do: Enum.at(Enum.at(b, i), j)
       leading = List.duplicate(0, j)
       data_count = j + k
       trailing = List.duplicate(0, total - data_count)

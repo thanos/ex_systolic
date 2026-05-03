@@ -5,6 +5,10 @@ defmodule ExSystolic.Examples.GEMMTest do
   alias ExSystolic.Examples.GEMM
 
   describe "run/2" do
+    test "empty matrices return empty result" do
+      assert GEMM.run([], []) == []
+    end
+
     test "1x1 identity" do
       assert GEMM.run([[1]], [[1]]) == [[1]]
     end

@@ -21,6 +21,26 @@ defmodule ExSystolic.ArrayTest do
 
     @impl true
     def coords(_opts), do: [{0, 0}, {0, 1}, {1, 0}, {1, 1}]
+
+    @impl true
+    def links(_opts, :west_to_east) do
+      [
+        ExSystolic.Link.new({{0, -1}, :east}, {{0, 0}, :west}),
+        ExSystolic.Link.new({{1, -1}, :east}, {{1, 0}, :west}),
+        ExSystolic.Link.new({{0, 0}, :east}, {{0, 1}, :west})
+      ]
+    end
+
+    def links(_opts, :north_to_south) do
+      [
+        ExSystolic.Link.new({{-1, 0}, :south}, {{0, 0}, :north}),
+        ExSystolic.Link.new({{-1, 1}, :south}, {{0, 1}, :north}),
+        ExSystolic.Link.new({{0, 0}, :south}, {{1, 0}, :north}),
+        ExSystolic.Link.new({{0, 1}, :south}, {{1, 1}, :north})
+      ]
+    end
+
+    def links(_opts, _direction), do: []
   end
 
   describe "new/1" do
@@ -261,6 +281,83 @@ defmodule ExSystolic.ArrayTest do
         |> Array.materialize_links()
 
       assert length(array.links) == 8
+    end
+
+    test "connect then materialize_links accumulates without duplicates" do
+      array =
+        Array.new(rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.materialize_links()
+
+      west_east_links =
+        Enum.filter(array.links, fn l ->
+          elem(l.from, 1) == :east or elem(l.to, 1) == :west
+        end)
+
+      north_south_links =
+        Enum.filter(array.links, fn l ->
+          elem(l.from, 1) == :south or elem(l.to, 1) == :north
+        end)
+
+      assert west_east_links != []
+      assert north_south_links != []
+    end
+  end
+
+  describe "input/3 duplicate rejection" do
+    test "raises on duplicate {coord, port} key" do
+      array =
+        Array.new(rows: 1, cols: 1)
+        |> Array.fill(MAC)
+
+      array = Array.input(array, :west, [{{0, 0}, [1, 2]}])
+
+      assert_raise ArgumentError, ~r/duplicate input stream/, fn ->
+        Array.input(array, :west, [{{0, 0}, [3, 4]}])
+      end
+    end
+  end
+
+  describe "result_matrix/1 non-Grid2D raises" do
+    test "raises ArgumentError for custom space" do
+      array =
+        Array.new(space: {DummySpace, []}, rows: 2, cols: 2)
+        |> Array.fill(MAC)
+
+      assert_raise ArgumentError, ~r/Grid2D-only/, fn ->
+        Array.result_matrix(array)
+      end
+    end
+  end
+
+  describe "custom space end-to-end execution" do
+    test "DummySpace array runs through Clock with correct PE states" do
+      array =
+        Array.new(space: {DummySpace, []}, rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, [{{0, 0}, [3]}, {{1, 0}, [7]}])
+        |> Array.input(:north, [{{0, 0}, [5]}, {{0, 1}, [11]}])
+
+      result = ExSystolic.Clock.run(array, ticks: 2)
+      {_mod, s00} = result.pes[{0, 0}]
+      assert s00 == 15
+    end
+
+    test "result_map/1 works with custom space" do
+      array =
+        Array.new(space: {DummySpace, []}, rows: 2, cols: 2)
+        |> Array.fill(MAC)
+        |> Array.connect(:west_to_east)
+        |> Array.connect(:north_to_south)
+        |> Array.input(:west, [{{0, 0}, [3]}, {{1, 0}, [7]}])
+        |> Array.input(:north, [{{0, 0}, [5]}, {{0, 1}, [11]}])
+
+      result = ExSystolic.Clock.run(array, ticks: 2)
+      result_map = Array.result_map(result)
+      assert result_map[{0, 0}] == 15
     end
   end
 end

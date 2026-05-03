@@ -11,6 +11,14 @@ defmodule ExSystolic.Link do
   after a fixed number of clock ticks.  The `buffer` field holds a
   `:queue` whose length never exceeds `capacity`.
 
+  ## Reserved values
+
+  The atom `:empty` is **reserved** to denote "no value present" when a
+  link buffer is drained.  PEs receiving `:empty` on an input port should
+  treat it as "no input this tick".  Do not write `:empty` as a payload
+  value into a link, or use it as a meaningful PE state symbol -- it
+  will collide with the empty-buffer signal.
+
   ## Determinism guarantee
 
   Links are purely functional data structures.  Every operation returns a
@@ -72,8 +80,9 @@ defmodule ExSystolic.Link do
 
       iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
       iex> {:ok, link2} = ExSystolic.Link.write(link, 42)
-      iex> ExSystolic.Link.read(link2)
-      {42, _}
+      iex> {val, _link3} = ExSystolic.Link.read(link2)
+      iex> val
+      42
 
   """
   @spec write(t(), term()) :: {:ok, t()} | {:error, :full}
@@ -91,6 +100,10 @@ defmodule ExSystolic.Link do
   Returns `{value, link}` when the buffer is non-empty, or `{:empty, link}`
   when nothing has been written yet.
 
+  Note: the atom `:empty` is **reserved** as the empty-buffer marker -- do
+  not write it as a payload value.  See the module documentation for
+  details.
+
   ## Examples
 
       iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
@@ -99,8 +112,13 @@ defmodule ExSystolic.Link do
       iex> val
       99
 
+      iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
+      iex> {result, _link} = ExSystolic.Link.read(link)
+      iex> result
+      :empty
+
   """
-  @spec read(t()) :: {term(), t()} | {:empty, t()}
+  @spec read(t()) :: {term() | :empty, t()}
   def read(%__MODULE__{buffer: buf} = link) do
     case :queue.out(buf) do
       {{:value, val}, new_buf} ->
@@ -169,11 +187,18 @@ defmodule ExSystolic.Link do
   `tick/1` is effectively a no-op on the buffer itself -- the Clock
   manages read-then-write ordering.
 
+  `tick/1` preserves any buffered values; it does not discard them.
+
   ## Examples
 
       iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
       iex> ExSystolic.Link.tick(link) == link
       true
+
+      iex> link = ExSystolic.Link.new({{0,0}, :east}, {{1,0}, :west})
+      iex> {:ok, link2} = ExSystolic.Link.write(link, 42)
+      iex> ExSystolic.Link.size(ExSystolic.Link.tick(link2))
+      1
 
   """
   @spec tick(t()) :: t()

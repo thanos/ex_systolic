@@ -8,17 +8,23 @@ defmodule ExSystolic.Backend.Interpreted do
 
   ## Tick execution order (CRITICAL)
 
-  Each tick executes in this **strict** order:
+  Each tick executes in this **strict** order, matching the BSP
+  contract documented in `ExSystolic.Backend`:
 
-  1. **READ**  -- read all link buffers (inputs from previous tick)
-  2. **EXECUTE** -- run every PE's `step/4` with those inputs
-  3. **COLLECT** -- gather all PE outputs
-  4. **WRITE** -- write outputs into link buffers (for next tick)
-  5. **RECORD** -- optionally append trace events
+  1. **INJECT** -- push pending external input streams into boundary
+     link buffers (handled by `ExSystolic.Clock.step/1`).
+  2. **READ**   -- read all link buffers (inputs from previous tick).
+  3. **EXECUTE** -- run every PE's `step/4` with those inputs
+     (`execute_tick/4`).
+  4. **COLLECT** -- gather all PE outputs.
+  5. **WRITE**  -- write outputs into link buffers (for next tick).
+  6. **RECORD** -- optionally append trace events.
 
   This ordering guarantees that no PE reads data produced in the same
   tick.  All reads see the state left by the *previous* tick; all writes
   prepare the state for the *next* tick.
+
+  Steps 1, 2, and 5 are delegated to `ExSystolic.Backend.LinkOps`.
 
   ## Why not GenServer per PE?
 
@@ -27,31 +33,9 @@ defmodule ExSystolic.Backend.Interpreted do
   correctness does not require concurrency.  Future backends may add
   parallelism, but the semantics must remain identical.
   """
-
+  alias ExSystolic.Backend.LinkOps
   alias ExSystolic.Link
   alias ExSystolic.Trace
-
-  @doc false
-  @spec read_inputs([Link.t()], [{ExSystolic.Grid.coord(), atom()}]) ::
-          %{{ExSystolic.Grid.coord(), atom()} => term()}
-  def read_inputs(links, input_ports) do
-    # Legacy helper kept for backwards compatibility. The Clock module
-    # contains the authoritative implementation that both reads and
-    # drains link buffers.
-    link_map = for link <- links, into: %{}, do: {link.to, link}
-
-    for {coord, port} <- input_ports, into: %{} do
-      key = {coord, port}
-
-      value =
-        case Map.get(link_map, key) do
-          nil -> :empty
-          link -> elem(Link.read(link), 0)
-        end
-
-      {key, value}
-    end
-  end
 
   @doc """
   Executes one tick for all PEs.
@@ -115,9 +99,13 @@ defmodule ExSystolic.Backend.Interpreted do
   @doc """
   Writes PE outputs into link buffers, returning updated links.
 
-  For each PE output port, find the link whose `from` endpoint matches
-  and write the value.  Links whose `from` endpoint has no corresponding
-  output are left unchanged.
+  Delegates to `ExSystolic.Backend.LinkOps.write_pe_outputs/2`.  The
+  third argument (`input_streams`) is also injected for backwards
+  compatibility; the returned tuple includes the remaining (deferred)
+  streams.
+
+  Prefer using the split helpers `ExSystolic.Backend.LinkOps.write_pe_outputs/2`
+  and `ExSystolic.Backend.LinkOps.inject_streams/2` directly.
 
   ## Examples
 
@@ -134,59 +122,8 @@ defmodule ExSystolic.Backend.Interpreted do
         ) ::
           {[Link.t()], %{{ExSystolic.Grid.coord(), atom()} => [term()]}}
   def write_outputs(links, tick_outputs, input_streams) do
-    updated_links = Enum.reduce(tick_outputs, links, &write_pe_outputs/2)
-    {updated_links, remaining_streams} = inject_inputs(updated_links, input_streams)
-    {updated_links, remaining_streams}
-  end
-
-  defp write_pe_outputs({coord, outputs}, acc_links) do
-    Enum.reduce(outputs, acc_links, fn {port, value}, links ->
-      write_to_link(links, {coord, port}, value)
-    end)
-  end
-
-  defp write_to_link(links, from_key, value) do
-    idx = Enum.find_index(links, &(&1.from == from_key))
-
-    if idx do
-      link = Enum.at(links, idx)
-
-      case Link.write(link, value) do
-        {:ok, new_link} -> List.replace_at(links, idx, new_link)
-        {:error, :full} -> links
-      end
-    else
-      links
-    end
-  end
-
-  defp inject_inputs(links, input_streams) do
-    Enum.reduce(input_streams, {links, %{}}, fn {key, stream}, {acc_links, acc_streams} ->
-      inject_single_input(acc_links, acc_streams, key, stream)
-    end)
-  end
-
-  defp inject_single_input(links, streams, {coord, port} = key, [val | rest]) do
-    idx = Enum.find_index(links, &(&1.to == {coord, port}))
-    do_inject(links, streams, key, idx, val, rest)
-  end
-
-  defp inject_single_input(links, streams, _key, _stream), do: {links, streams}
-
-  defp do_inject(links, streams, _key, nil, _val, _rest), do: {links, streams}
-
-  defp do_inject(links, streams, key, idx, val, rest) do
-    link = Enum.at(links, idx)
-
-    case Link.write(link, val) do
-      {:ok, new_link} ->
-        new_links = List.replace_at(links, idx, new_link)
-        new_streams = if rest == [], do: streams, else: Map.put(streams, key, rest)
-        {new_links, new_streams}
-
-      {:error, :full} ->
-        {links, Map.put(streams, key, [val | rest])}
-    end
+    updated_links = LinkOps.write_pe_outputs(links, tick_outputs)
+    LinkOps.inject_streams(updated_links, input_streams)
   end
 
   @doc """

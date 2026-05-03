@@ -9,6 +9,25 @@ defmodule ExSystolic do
 
   This is not a spreadsheet engine, a DAG executor, or a reactive system.
 
+  ## Architecture
+
+  Every tick follows the Bulk Synchronous Parallel (BSP) model:
+
+      ┌─────────┐  INJECT   ┌─────────┐  READ    ┌─────────┐  EXECUTE
+      │  Input  │──────────>│  Links   │─────────>│   PEs   │──────────┐
+      │ Streams │           │ (FIFOs)  │          │ (step)  │          │
+      └─────────┘          └─────────┘          └─────────┘          │
+                                                                    │ COLLECT
+                                                                    ▼
+      ┌─────────┐  RECORD   ┌─────────┐  WRITE   ┌─────────┐  ┌─────────┐
+      │  Trace  │<──────────│  Clock  │<─────────│  Links  │  │Outputs  │
+      │ Events  │           │ driver  │          │ (FIFOs) │  │  map    │
+      └─────────┘           └─────────┘          └─────────┘  └─────────┘
+
+  All backends (interpreted, partitioned) execute the same six-step
+  sequence.  The partitioned backend parallelises step 3 (EXECUTE)
+  across tiles but preserves determinism via the BSP barrier.
+
   ## Tutorial & Examples
 
   The full tutorial, quick-start guide, real-world examples (image
@@ -29,21 +48,29 @@ defmodule ExSystolic do
 
       result = Clock.run(array, ticks: 5)
 
-   ## Module overview
+  ## Module overview
 
-   | Module | Role |
-   |--------|------|
-   | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
-   | `ExSystolic.Space` | Pluggable space / topology behaviour |
-   | `ExSystolic.Space.Grid2D` | Default 2D rectangular space implementation |
-   | `ExSystolic.Link` | FIFO communication channels between PE ports |
-   | `ExSystolic.PE` | Behaviour for processing elements |
-   | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
-   | `ExSystolic.Array` | Array construction: fill, connect, input |
-   | `ExSystolic.Clock` | Tick-by-tick execution driver |
-   | `ExSystolic.Trace` | Optional execution trace recording |
-   | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
-   | `ExSystolic.Examples.GEMM` | General matrix multiply |
+  | Module | Role |
+  |--------|------|
+  | `ExSystolic` | Top-level entry point and version |
+  | `ExSystolic.Application` | Supervision tree (TaskSupervisor, Poolex pool) |
+  | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
+  | `ExSystolic.Space` | Pluggable space / topology behaviour |
+  | `ExSystolic.Space.Grid2D` | Default 2D rectangular space implementation |
+  | `ExSystolic.Link` | FIFO communication channels between PE ports |
+  | `ExSystolic.PE` | Behaviour for processing elements; `value/2`, `present?/2` helpers |
+  | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
+  | `ExSystolic.Array` | Array construction: fill, connect, input, results |
+  | `ExSystolic.Clock` | Tick-by-tick execution driver |
+  | `ExSystolic.Trace` | Execution trace recording and querying |
+  | `ExSystolic.Backend` | Backend behaviour and BSP contract |
+  | `ExSystolic.Backend.LinkOps` | Shared link buffer operations (inject, drain, write) |
+  | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
+  | `ExSystolic.Backend.Partitioned` | Tile-based parallel backend (Task.Supervisor or Poolex) |
+  | `ExSystolic.Backend.PoolexWorker` | GenServer worker for Poolex dispatch |
+  | `ExSystolic.Tile` | Tile data structure for partitioned execution |
+  | `ExSystolic.TilePartitioner` | Splits array into rectangular tiles |
+  | `ExSystolic.Examples.GEMM` | General matrix multiply |
   """
 
   @doc """

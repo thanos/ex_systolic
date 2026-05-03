@@ -4,26 +4,6 @@ defmodule ExSystolic.Backend.InterpretedTest do
   alias ExSystolic.Backend.Interpreted
   alias ExSystolic.{Link, PE.MAC}
 
-  describe "read_inputs/2" do
-    test "reads values from link buffers" do
-      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
-      {:ok, link2} = Link.write(link, 42)
-      inputs = Interpreted.read_inputs([link2], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == 42
-    end
-
-    test "returns :empty for missing link" do
-      inputs = Interpreted.read_inputs([], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == :empty
-    end
-
-    test "returns :empty for empty buffer" do
-      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
-      inputs = Interpreted.read_inputs([link], [{{0, 0}, :west}])
-      assert inputs[{{0, 0}, :west}] == :empty
-    end
-  end
-
   describe "execute_tick/4" do
     test "executes one PE step" do
       pes = %{{0, 0} => {MAC, 0}}
@@ -68,6 +48,22 @@ defmodule ExSystolic.Backend.InterpretedTest do
       assert val == 99
     end
 
+    test "silently drops output when link is full" do
+      link = Link.new({{0, 0}, :east}, {{0, 1}, :west}, capacity: 1)
+      {:ok, full_link} = Link.write(link, 42)
+      outputs = %{{0, 0} => %{east: 99}}
+      {new_links, _remaining} = Interpreted.write_outputs([full_link], outputs, %{})
+      {:ok, val} = Link.peek(Enum.at(new_links, 0))
+      assert val == 42
+    end
+
+    test "silently skips output port with no matching link" do
+      link = Link.new({{0, 0}, :east}, {{0, 1}, :west})
+      outputs = %{{0, 0} => %{north: 77, result: 77}}
+      {new_links, _remaining} = Interpreted.write_outputs([link], outputs, %{})
+      assert Link.empty?(Enum.at(new_links, 0))
+    end
+
     test "injects external input streams" do
       link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
       input_streams = %{{{0, 0}, :west} => [10, 20]}
@@ -75,6 +71,40 @@ defmodule ExSystolic.Backend.InterpretedTest do
       {:ok, val} = Link.peek(Enum.at(new_links, 0))
       assert val == 10
       assert remaining[{{0, 0}, :west}] == [20]
+    end
+
+    test "inject input with exhausted stream removes key" do
+      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
+      input_streams = %{{{0, 0}, :west} => [10]}
+      {new_links, remaining} = Interpreted.write_outputs([link], %{}, input_streams)
+      {:ok, val} = Link.peek(Enum.at(new_links, 0))
+      assert val == 10
+      refute Map.has_key?(remaining, {{0, 0}, :west})
+    end
+
+    test "inject input with no matching link silently drops stream" do
+      input_streams = %{{{99, 99}, :west} => [10]}
+      {new_links, remaining} = Interpreted.write_outputs([], %{}, input_streams)
+      assert new_links == []
+      assert remaining == %{}
+    end
+
+    test "inject input deferred when link is full" do
+      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west}, capacity: 1)
+      {:ok, full_link} = Link.write(link, 42)
+      input_streams = %{{{0, 0}, :west} => [99, 100]}
+      {new_links, remaining} = Interpreted.write_outputs([full_link], %{}, input_streams)
+      {:ok, val} = Link.peek(Enum.at(new_links, 0))
+      assert val == 42
+      assert remaining[{{0, 0}, :west}] == [99, 100]
+    end
+
+    test "inject with empty stream is a no-op" do
+      link = Link.new({{-1, 0}, :east}, {{0, 0}, :west})
+      input_streams = %{{{0, 0}, :west} => []}
+      {new_links, remaining} = Interpreted.write_outputs([link], %{}, input_streams)
+      assert Link.empty?(Enum.at(new_links, 0))
+      assert remaining == %{}
     end
   end
 
