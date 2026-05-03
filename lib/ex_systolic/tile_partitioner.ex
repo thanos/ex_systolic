@@ -93,13 +93,13 @@ defmodule ExSystolic.TilePartitioner do
         {r, c}
       end
 
-    coord_set = MapSet.new(coords)
+    coord_set = Map.new(coords, &{&1, true})
     pes = Map.take(array.pes, coords)
 
     local_links =
       Enum.filter(array.links, fn link ->
-        MapSet.member?(coord_set, elem(link.from, 0)) and
-          MapSet.member?(coord_set, elem(link.to, 0))
+        Map.has_key?(coord_set, elem(link.from, 0)) and
+          Map.has_key?(coord_set, elem(link.to, 0))
       end)
 
     %Tile{
