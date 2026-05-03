@@ -68,7 +68,6 @@ defmodule ExSystolic.MixProject do
       extras: [
         "README.md": [title: "README"],
         "CHANGELOG.md": [title: "Changelog"],
-        "RELEASE_NOTES.md": [title: "Release Notes"],
         LICENSE: [title: "License"]
       ],
       groups_for_modules: [
