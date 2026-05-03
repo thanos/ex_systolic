@@ -56,7 +56,7 @@ defmodule ExSystolic.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
         "Coveralls" => "https://coveralls.io/github/thanos/ex_systolic"
       },
-      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md RELEASE_NOTES.md .formatter.exs)
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
     ]
   end
 
