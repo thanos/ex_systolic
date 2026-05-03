@@ -2,13 +2,15 @@ defmodule ExSystolic.Space do
   @moduledoc """
   Behaviour defining the spatial model of a systolic array.
 
-  A Space is responsible for three things:
+  A Space is responsible for four things:
 
   1. **Coordinate validation** -- is a given term a valid coordinate in
      this space?
   2. **Neighbour relationships** -- given a coordinate, what are its
      neighbours and which port connects to each?
   3. **Port definitions** -- which named ports does a coordinate expose?
+  4. **Link topology** -- given a direction, produce the full set of
+     internal and boundary links.
 
   ## Design intent
 
@@ -20,11 +22,11 @@ defmodule ExSystolic.Space do
   This means you can introduce a graph topology, a hierarchical layout,
   or a vector space in a future phase without touching execution logic.
 
-   ## Implementing a custom space
+  ## Implementing a custom space
 
-   Any module that implements the callbacks below can serve as a
-   space.  The `opts` argument lets the same module serve multiple
-   configurations (e.g. different grid sizes).
+  Any module that implements the callbacks below can serve as a
+  space.  The `opts` argument lets the same module serve multiple
+  configurations (e.g. different grid sizes).
 
       defmodule MyGraphSpace do
         @behaviour ExSystolic.Space
@@ -37,11 +39,14 @@ defmodule ExSystolic.Space do
           Map.get(adjacency, coord, %{})
         end
 
-         @impl true
-         def ports(_coord, _opts), do: [:in, :out]
+        @impl true
+        def ports(_coord, _opts), do: [:in, :out]
 
-         @impl true
-         def coords(adjacency), do: Map.keys(adjacency)
+        @impl true
+        def coords(adjacency), do: Map.keys(adjacency)
+
+        @impl true
+        def links(_adjacency, _direction), do: []
       end
   """
 
@@ -87,4 +92,16 @@ defmodule ExSystolic.Space do
   match what is accepted by `neighbors/2` and `ports/2`.
   """
   @callback coords(opts :: term()) :: [coord()]
+
+  @doc """
+  Returns the list of `Link.t()` for a given direction.
+
+  Includes both **internal links** (PE-to-PE) and **boundary links**
+  (external-input-to-PE).  The direction atom is space-specific
+  (e.g. `:west_to_east` for Grid2D).  Each space module defines the
+  set of valid direction atoms and the resulting link topology.
+
+  Return an empty list if the direction is not recognized.
+  """
+  @callback links(opts :: term(), direction :: atom()) :: [ExSystolic.Link.t()]
 end

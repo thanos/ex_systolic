@@ -4,6 +4,8 @@ defmodule ExSystolic.TraceTest do
   alias ExSystolic.Trace
   alias ExSystolic.Trace.Event
 
+  doctest Trace
+
   describe "new/1" do
     test "creates empty trace" do
       trace = Trace.new()
@@ -106,6 +108,44 @@ defmodule ExSystolic.TraceTest do
       assert [_e0] = Trace.at(trace, 0)
       assert [_e0, _e1] = Trace.at(trace, 1)
       assert [] = Trace.at(trace, 5)
+    end
+
+    test "for_coord returns events in chronological order when using record" do
+      e0 = %Event{
+        tick: 0,
+        coord: {0, 0},
+        inputs: %{},
+        outputs: %{},
+        state_before: 0,
+        state_after: 0
+      }
+
+      e1 = %Event{
+        tick: 1,
+        coord: {0, 0},
+        inputs: %{},
+        outputs: %{},
+        state_before: 0,
+        state_after: 1
+      }
+
+      e2 = %Event{
+        tick: 2,
+        coord: {0, 0},
+        inputs: %{},
+        outputs: %{},
+        state_before: 0,
+        state_after: 2
+      }
+
+      trace = Trace.new() |> Trace.record(e0) |> Trace.record(e1) |> Trace.record(e2)
+
+      assert [0] = Trace.at(trace, 0) |> Enum.map(& &1.tick)
+      assert [1] = Trace.at(trace, 1) |> Enum.map(& &1.tick)
+      assert [2] = Trace.at(trace, 2) |> Enum.map(& &1.tick)
+
+      for_coord = Trace.for_coord(trace, {0, 0}) |> Enum.map(& &1.tick)
+      assert for_coord == [0, 1, 2]
     end
   end
 

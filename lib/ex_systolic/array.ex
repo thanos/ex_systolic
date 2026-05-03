@@ -43,7 +43,7 @@ defmodule ExSystolic.Array do
    - `:input_streams` -- pending external input streams
   """
 
-  alias ExSystolic.{Grid, Link, Space.Grid2D, Trace}
+  alias ExSystolic.{Grid, Link, Space, Space.Grid2D, Trace}
 
   @type space_spec :: {module(), keyword()}
 
@@ -182,16 +182,10 @@ defmodule ExSystolic.Array do
   @doc """
   Connects PEs along the specified axis.
 
-  Uses the array's Space module to determine neighbour relationships
-  and materializes links accordingly.  For Grid2D, this produces the
-  same links as before.
-
-  Supported directions:
-
-  - `:west_to_east` -- links flowing eastward (row r, col c -> col c+1)
-  - `:north_to_south` -- links flowing southward (row r, col c -> row r+1)
-
-  Boundary links for external input are also created.
+  Delegates to the array's Space module to produce both internal
+  (PE-to-PE) and boundary (external-input-to-PE) links for the given
+  direction.  The set of valid directions is space-specific; Grid2D
+  supports `:west_to_east` and `:north_to_south`.
 
   ## Examples
 
@@ -201,100 +195,11 @@ defmodule ExSystolic.Array do
       4
 
   """
-  @spec connect(t(), :west_to_east | :north_to_south) :: t()
+  @spec connect(t(), atom()) :: t()
   def connect(%{space: {space_mod, space_opts}, links: links} = array, direction) do
-    new_links = build_direction_links(space_mod, space_opts, direction)
+    new_links = space_mod.links(space_opts, direction)
     %{array | links: links ++ new_links}
   end
-
-  defp build_direction_links(Grid2D, space_opts, :west_to_east) do
-    boundary = west_boundary_links(space_opts)
-    internal = west_east_internal_links(space_opts)
-    boundary ++ internal
-  end
-
-  defp build_direction_links(Grid2D, space_opts, :north_to_south) do
-    boundary = north_boundary_links(space_opts)
-    internal = north_south_internal_links(space_opts)
-    boundary ++ internal
-  end
-
-  defp build_direction_links(space_mod, space_opts, direction) do
-    materialize_links_from_space(space_mod, space_opts, direction)
-  end
-
-  defp west_boundary_links(opts) do
-    rows = Keyword.fetch!(opts, :rows)
-
-    for r <- 0..(rows - 1) do
-      Link.new({{r, -1}, :east}, {{r, 0}, :west})
-    end
-  end
-
-  defp west_east_internal_links(opts) do
-    rows = Keyword.fetch!(opts, :rows)
-    cols = Keyword.fetch!(opts, :cols)
-
-    if cols > 1 do
-      for r <- 0..(rows - 1),
-          c <- 0..(cols - 2) do
-        Link.new({{r, c}, :east}, {{r, c + 1}, :west})
-      end
-    else
-      []
-    end
-  end
-
-  defp north_boundary_links(opts) do
-    cols = Keyword.fetch!(opts, :cols)
-
-    for c <- 0..(cols - 1) do
-      Link.new({{-1, c}, :south}, {{0, c}, :north})
-    end
-  end
-
-  defp north_south_internal_links(opts) do
-    rows = Keyword.fetch!(opts, :rows)
-    cols = Keyword.fetch!(opts, :cols)
-
-    if rows > 1 do
-      for r <- 0..(rows - 2),
-          c <- 0..(cols - 1) do
-        Link.new({{r, c}, :south}, {{r + 1, c}, :north})
-      end
-    else
-      []
-    end
-  end
-
-  defp materialize_links_from_space(space_mod, space_opts, direction) do
-    coords = space_mod.coords(space_opts)
-    {from_port, to_port} = direction_ports(direction)
-
-    internal =
-      for coord <- coords,
-          neighbors = space_mod.neighbors(coord, space_opts),
-          neighbor = Map.get(neighbors, from_port),
-          neighbor != nil do
-        Link.new({coord, from_port}, {neighbor, to_port})
-      end
-
-    boundary =
-      for coord <- coords,
-          neighbors = space_mod.neighbors(coord, space_opts),
-          Map.get(neighbors, from_port) == nil do
-        boundary_from = boundary_from(coord, from_port)
-        Link.new(boundary_from, {coord, to_port})
-      end
-
-    boundary ++ internal
-  end
-
-  defp direction_ports(:west_to_east), do: {:east, :west}
-  defp direction_ports(:north_to_south), do: {:south, :north}
-
-  defp boundary_from({r, _c}, :east), do: {{r, -1}, :east}
-  defp boundary_from({_r, c}, :south), do: {{-1, c}, :south}
 
   @doc """
   Materializes all links for the array using its Space module.
@@ -336,15 +241,16 @@ defmodule ExSystolic.Array do
   @doc """
   Attaches external input streams to the array.
 
-  `direction` is `:west` or `:north`, indicating which boundary the
-  streams enter from.
+  `port` is an atom naming the PE port the stream enters through.
+  Common values are `:west` and `:north` for Grid2D arrays, but any
+  atom is accepted to support custom spaces with arbitrary port names.
 
-  `stream_specs` is a list of `{{row, col}, values}` where `values` is
-  a list of items to inject one per tick into the PE at `{row, col}`
-  through the appropriate port.
+  `stream_specs` is a list of `{coord, values}` where `values` is
+  a list of items to inject one per tick into the PE at `coord`
+  through `port`.
 
-  For `:west`, items enter at port `:west`.
-  For `:north`, items enter at port `:north`.
+  Calling `input/3` for the same `{coord, port}` more than once raises
+  `ArgumentError` -- duplicates are rejected to prevent silent data loss.
 
   ## Examples
 
@@ -356,18 +262,20 @@ defmodule ExSystolic.Array do
       1
 
   """
-  @spec input(t(), :west | :north, [{{non_neg_integer(), non_neg_integer()}, [term()]}]) :: t()
-  def input(%{input_streams: streams} = array, direction, stream_specs) do
-    port =
-      case direction do
-        :west -> :west
-        :north -> :north
-      end
-
+  @spec input(t(), atom(), [{Space.coord(), [term()]}]) :: t()
+  def input(%{input_streams: streams} = array, port, stream_specs)
+      when is_atom(port) do
     new_streams =
-      for {{row, col}, values} <- stream_specs, reduce: streams do
-        acc -> Map.put(acc, {{row, col}, port}, values)
-      end
+      Enum.reduce(stream_specs, streams, fn {coord, values}, acc ->
+        key = {coord, port}
+
+        if Map.has_key?(acc, key) do
+          raise ArgumentError,
+                "duplicate input stream for #{inspect(key)}; call Array.input/3 once per coord/port"
+        end
+
+        Map.put(acc, key, values)
+      end)
 
     %{array | input_streams: new_streams}
   end
@@ -391,6 +299,10 @@ defmodule ExSystolic.Array do
   Returns a list of lists (row-major) suitable for matrix operations.
   Each entry is the PE state at that coordinate.
 
+  This function is **Grid2D-specific**: it relies on the array having
+  rectangular `{row, col}` coordinates.  For arrays built on a custom
+  `ExSystolic.Space`, use `result_map/1` instead.
+
   ## Examples
 
       iex> array = ExSystolic.Array.new(rows: 2, cols: 2) |> ExSystolic.Array.fill(ExSystolic.PE.MAC)
@@ -399,12 +311,34 @@ defmodule ExSystolic.Array do
 
   """
   @spec result_matrix(t()) :: [[term()]]
-  def result_matrix(%{grid: grid, pes: pes}) do
-    for r <- 0..(grid.rows - 1) do
-      for c <- 0..(grid.cols - 1) do
+  def result_matrix(%{space: {Grid2D, _opts}, grid: grid, pes: pes}) do
+    for r <- 0..(grid.rows - 1)//1 do
+      for c <- 0..(grid.cols - 1)//1 do
         cell_state(pes, {r, c})
       end
     end
+  end
+
+  def result_matrix(%{space: {space_mod, _}}) do
+    raise ArgumentError,
+          "result_matrix/1 is Grid2D-only; got space #{inspect(space_mod)}. Use result_map/1 instead."
+  end
+
+  @doc """
+  Returns a map of `coord => state` for every PE.
+
+  Works for any Space implementation, not just Grid2D.
+
+  ## Examples
+
+      iex> array = ExSystolic.Array.new(rows: 2, cols: 2) |> ExSystolic.Array.fill(ExSystolic.PE.MAC)
+      iex> ExSystolic.Array.result_map(array)
+      %{{0, 0} => 0, {0, 1} => 0, {1, 0} => 0, {1, 1} => 0}
+
+  """
+  @spec result_map(t()) :: %{Space.coord() => term()}
+  def result_map(%{pes: pes}) do
+    for {coord, {_mod, state}} <- pes, into: %{}, do: {coord, state}
   end
 
   defp cell_state(pes, coord) do

@@ -2,24 +2,37 @@ defmodule ExSystolic.Clock do
   @moduledoc """
   The clock drives systolic array execution tick by tick.
 
-  The clock is the orchestrator: it calls the interpreted backend's
-  tick sequence (read, execute, write, record) in strict order, for
-  as many ticks as requested.
+  The clock is the orchestrator: it delegates to the selected backend's
+  tick sequence in strict order, for as many ticks as requested.
+
+  ## Backend selection
+
+  By default, the interpreted (single-process) backend is used.  You can
+  select the partitioned (tile-based parallel) backend via the `:backend`
+  option:
+
+      # Interpreted (default)
+      Clock.run(array, ticks: 10)
+
+      # Partitioned
+      Clock.run(array, ticks: 10, backend: :partitioned, tile_rows: 4, tile_cols: 4)
+
+  Both backends produce **identical results** for the same inputs.
 
   ## Determinism
 
-  Because the interpreted backend is purely functional and the clock
-  does not introduce any non-determinism (no concurrency, no random
-  scheduling), running `Clock.run(array, ticks: n)` always produces the
-  same result for the same inputs.
+  Because the interpreted backend is purely functional and the partitioned
+  backend uses BSP barriers (no interleaving between compute and
+  communication), running `Clock.run(array, ticks: n)` always produces
+  the same result for the same inputs, regardless of backend choice.
 
   ## API
 
   - `run/2` -- execute N ticks
-  - `step/1` -- execute exactly one tick
+  - `step/1` -- execute exactly one tick (interpreted only)
   """
 
-  alias ExSystolic.Backend.Interpreted
+  alias ExSystolic.Backend.{Interpreted, LinkOps, Partitioned}
   alias ExSystolic.Trace
 
   @doc """
@@ -27,6 +40,13 @@ defmodule ExSystolic.Clock do
 
   Returns the final array state, which includes the updated PEs, links,
   tick counter, and trace.
+
+  ## Options
+
+  - `:ticks` -- number of ticks (required)
+  - `:backend` -- `:interpreted` (default) or `:partitioned`
+  - `:tile_rows` -- rows per tile (partitioned only)
+  - `:tile_cols` -- cols per tile (partitioned only)
 
   ## Examples
 
@@ -41,12 +61,24 @@ defmodule ExSystolic.Clock do
   """
   @spec run(ExSystolic.Array.t(), keyword()) :: ExSystolic.Array.t()
   def run(array, opts) do
-    ticks = Keyword.fetch!(opts, :ticks)
-    Enum.reduce(1..ticks//1, array, fn _, acc -> step(acc) end)
+    backend = Keyword.get(opts, :backend, :interpreted)
+
+    case backend do
+      :interpreted ->
+        ticks = Keyword.fetch!(opts, :ticks)
+        Enum.reduce(1..ticks//1, array, fn _, acc -> step(acc) end)
+
+      :partitioned ->
+        Partitioned.run(array, opts)
+
+      other ->
+        raise ArgumentError,
+              "unknown backend #{inspect(other)}; expected :interpreted or :partitioned"
+    end
   end
 
   @doc """
-  Executes a single tick of the array.
+  Executes a single tick of the array using the interpreted backend.
 
   Follows the strict order:
   1. INJECT external input streams into boundary link buffers
@@ -78,22 +110,19 @@ defmodule ExSystolic.Clock do
       input_streams: input_streams
     } = array
 
-    {links_after_inject, remaining_streams} = inject_inputs(links, input_streams)
+    {links_after_inject, remaining_streams} = LinkOps.inject_streams(links, input_streams)
 
-    # Derive input ports from the current link endpoints so that custom
-    # spaces with different port names are supported.
     input_ports =
       links_after_inject
       |> Enum.map(& &1.to)
       |> Enum.uniq()
 
-    {inputs_map, drained_links} = read_all_links(links_after_inject, input_ports)
+    {inputs_map, drained_links} = LinkOps.drain_links(links_after_inject, input_ports)
 
     {new_pes, tick_outputs, events} =
       Interpreted.execute_tick(pes, inputs_map, tick, trace_enabled)
 
-    {new_links, _remaining} =
-      Interpreted.write_outputs(drained_links, tick_outputs, %{})
+    new_links = LinkOps.write_pe_outputs(drained_links, tick_outputs)
 
     new_trace =
       if trace_enabled do
@@ -110,54 +139,5 @@ defmodule ExSystolic.Clock do
         trace: new_trace,
         input_streams: remaining_streams
     }
-  end
-
-  defp inject_inputs(links, input_streams) do
-    Enum.reduce(input_streams, {links, %{}}, fn {key, stream}, {acc_links, acc_streams} ->
-      inject_one(acc_links, acc_streams, key, stream)
-    end)
-  end
-
-  defp inject_one(links, streams, {coord, port} = key, [val | rest]) do
-    idx = Enum.find_index(links, fn l -> l.to == {coord, port} end)
-    do_inject(links, streams, key, idx, val, rest)
-  end
-
-  defp inject_one(links, streams, _key, _stream), do: {links, streams}
-
-  defp do_inject(links, streams, _key, nil, _val, _rest), do: {links, streams}
-
-  defp do_inject(links, streams, key, idx, val, rest) do
-    link = Enum.at(links, idx)
-
-    case ExSystolic.Link.write(link, val) do
-      {:ok, new_link} ->
-        new_links = List.replace_at(links, idx, new_link)
-        new_streams = if rest == [], do: streams, else: Map.put(streams, key, rest)
-        {new_links, new_streams}
-
-      {:error, :full} ->
-        {links, Map.put(streams, key, [val | rest])}
-    end
-  end
-
-  defp read_all_links(links, input_ports) do
-    link_to_idx =
-      for {link, idx} <- Enum.with_index(links), into: %{}, do: {link.to, idx}
-
-    Enum.reduce(input_ports, {%{}, links}, fn {_coord, _port} = key, {acc_inputs, acc_links} ->
-      idx = Map.get(link_to_idx, key)
-
-      case idx do
-        nil ->
-          {Map.put(acc_inputs, key, :empty), acc_links}
-
-        i ->
-          link = Enum.at(acc_links, i)
-          {val, new_link} = ExSystolic.Link.read(link)
-          new_links = List.replace_at(acc_links, i, new_link)
-          {Map.put(acc_inputs, key, val), new_links}
-      end
-    end)
   end
 end

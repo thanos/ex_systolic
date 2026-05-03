@@ -127,7 +127,7 @@ defmodule ExSystolic.Grid do
   """
   @spec coords(t()) :: [coord()]
   def coords(%__MODULE__{rows: rows, cols: cols}) do
-    for r <- 0..(rows - 1), c <- 0..(cols - 1), do: {r, c}
+    for r <- 0..(rows - 1)//1, c <- 0..(cols - 1)//1, do: {r, c}
   end
 
   @doc """
@@ -139,6 +139,8 @@ defmodule ExSystolic.Grid do
       iex> ExSystolic.Grid.member?(grid, {1, 1})
       true
       iex> ExSystolic.Grid.member?(grid, {2, 0})
+      false
+      iex> ExSystolic.Grid.member?(grid, {-1, 0})
       false
 
   """
