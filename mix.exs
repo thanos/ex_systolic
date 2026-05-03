@@ -2,7 +2,7 @@ defmodule ExSystolic.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/thanos/ex_systolic"
-  @version "0.1.0"
+  @version "0.2.0"
 
   def project do
     [
@@ -56,7 +56,7 @@ defmodule ExSystolic.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
         "Coveralls" => "https://coveralls.io/github/thanos/ex_systolic"
       },
-      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
+      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md RELEASE_NOTES.md .formatter.exs)
     ]
   end
 
@@ -68,10 +68,13 @@ defmodule ExSystolic.MixProject do
       extras: [
         "README.md": [title: "README"],
         "CHANGELOG.md": [title: "Changelog"],
+        "RELEASE_NOTES.md": [title: "Release Notes"],
         LICENSE: [title: "License"]
       ],
       groups_for_modules: [
         Core: [
+          ExSystolic,
+          ExSystolic.Application,
           ExSystolic.Grid,
           ExSystolic.Link,
           ExSystolic.PE,
@@ -85,6 +88,8 @@ defmodule ExSystolic.MixProject do
         ],
         "Processing Elements": [ExSystolic.PE.MAC],
         Backends: [
+          ExSystolic.Backend,
+          ExSystolic.Backend.LinkOps,
           ExSystolic.Backend.Interpreted,
           ExSystolic.Backend.Partitioned,
           ExSystolic.Backend.PoolexWorker

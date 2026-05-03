@@ -90,11 +90,11 @@ The ex_systolic PE behaviour is designed to support any semi-ring: future phases
 The entire execution is deterministic because:
 
 1. All data structures are immutable
-2. The tick order (inject, read, execute, write, record) is fixed
-3. PE step functions are pure
-4. No concurrency, no random scheduling, no IO during execution
+2. The tick order (inject, read, execute, collect, write, record) is fixed and documented as the BSP contract
+3. PE step functions are pure (side effects are forbidden by contract)
+4. The partitioned backend uses `ordered: true` dispatch and sorts trace events by `{tick, coord}`
 
-Given the same array configuration and input streams, `Clock.run` always produces the same result. This is a design requirement, not an accident.
+Given the same array configuration and input streams, `Clock.run` always produces the same result -- whether using the interpreted or partitioned backend. This is a design requirement, verified by conformance tests.
 
 ---
 
@@ -105,7 +105,7 @@ Add `ex_systolic` to your dependencies:
 ```elixir
 def deps do
   [
-    {:ex_systolic, "~> 0.1.0"}
+    {:ex_systolic, "~> 0.2.0"}
   ]
 end
 ```
@@ -124,6 +124,11 @@ array =
   |> Array.input(:north, [{{0, 0}, [5, 7]}, {{0, 1}, [6, 8]}])
 
 result = Clock.run(array, ticks: 5)
+
+# Or use the parallel backend for larger arrays
+result = Clock.run(array, ticks: 5, backend: :partitioned)
+result = Clock.run(array, ticks: 5, backend: :partitioned, tile_rows: 2, tile_cols: 2)
+result = Clock.run(array, ticks: 5, backend: :partitioned, dispatch: :pool)
 ```
 
 ---
@@ -164,12 +169,17 @@ defmodule MySpace do
 
   @impl true
   def coords(opts), do: ...
+
+  @impl true
+  def links(opts, direction), do: ...
 end
 ```
 
-Phase 1.5 added this Space abstraction without changing the clock or
-link semantics: execution is still strictly tick-based and
-deterministic, only the topology is now pluggable.
+Phase 1.5 added the Space abstraction. Phase 2 added the `links/2`
+callback so that `Array.connect/2` delegates topology-specific link
+construction (including boundary links) to the Space module. Execution
+is still strictly tick-based and deterministic; only the topology is
+pluggable.
 
 ---
 
@@ -204,10 +214,9 @@ defmodule SobelPE do
 
   @impl true
   def step(kernel_row, inputs, _tick, _context) do
-    pixel = Map.get(inputs, :north, 0)
-    pixel_val = if pixel == :empty, do: 0, else: pixel
+    pixel = ExSystolic.PE.value(Map.get(inputs, :north), 0)
 
-    partial = Enum.zip(kernel_row, pixel_val)
+    partial = Enum.zip(kernel_row, pixel)
     |> Enum.map(fn {k, p} -> k * p end)
     |> Enum.sum()
 
@@ -272,8 +281,8 @@ defmodule TropicalMAC do
     new_acc = min(acc, product)
 
     outputs = %{result: new_acc}
-    outputs = if not is_nil(a) and a != :empty, do: Map.put(outputs, :east, a), else: outputs
-    outputs = if not is_nil(b) and b != :empty, do: Map.put(outputs, :south, b), else: outputs
+    outputs = if ExSystolic.PE.present?(a), do: Map.put(outputs, :east, a), else: outputs
+    outputs = if ExSystolic.PE.present?(b), do: Map.put(outputs, :south, b), else: outputs
 
     {new_acc, outputs}
   end
@@ -324,22 +333,33 @@ Each PE is a pure state machine. Each link is a FIFO buffer. The clock drives ex
 1. **INJECT** external inputs into boundary links
 2. **READ** all link buffers (consuming values from the previous tick)
 3. **EXECUTE** all PE step functions
-4. **WRITE** PE outputs into link buffers (for the next tick)
-5. **RECORD** trace events (if tracing is enabled)
+4. **COLLECT** all PE outputs
+5. **WRITE** PE outputs into link buffers (for the next tick)
+6. **RECORD** trace events (if tracing is enabled)
 
 ### Module Map
 
 | Module | Role |
 |--------|------|
+| `ExSystolic` | Top-level entry point and version |
+| `ExSystolic.Application` | Supervision tree (TaskSupervisor, Poolex pool) |
 | `ExSystolic.Grid` | Coordinate geometry and neighbour lookups |
+| `ExSystolic.Space` | Pluggable space / topology behaviour |
+| `ExSystolic.Space.Grid2D` | Default 2D rectangular space implementation |
 | `ExSystolic.Link` | FIFO communication channels between PE ports |
-| `ExSystolic.PE` | Behaviour for processing elements |
+| `ExSystolic.PE` | Behaviour for processing elements; `value/2`, `present?/2` helpers |
 | `ExSystolic.PE.MAC` | Multiply-accumulate PE |
-| `ExSystolic.Array` | Array construction: fill, connect, input |
+| `ExSystolic.Array` | Array construction: fill, connect, input, results |
 | `ExSystolic.Clock` | Tick-by-tick execution driver |
-| `ExSystolic.Trace` | Optional execution trace recording |
+| `ExSystolic.Trace` | Optional execution trace recording and querying |
+| `ExSystolic.Backend` | Backend behaviour and BSP contract |
+| `ExSystolic.Backend.LinkOps` | Shared link buffer operations (inject, drain, write) |
 | `ExSystolic.Backend.Interpreted` | Single-process reference backend |
-| `ExSystolic.Examples.GEMM` | General matrix multiply |
+| `ExSystolic.Backend.Partitioned` | Tile-based parallel backend (`:tasks` or `:pool` dispatch) |
+| `ExSystolic.Backend.PoolexWorker` | GenServer worker for Poolex dispatch |
+| `ExSystolic.Tile` | Tile data structure for partitioned execution |
+| `ExSystolic.TilePartitioner` | Splits array into rectangular tiles |
+| `ExSystolic.Examples.GEMM` | General matrix multiply (demo/reference) |
 
 ---
 
@@ -382,7 +402,9 @@ defmodule MyPE do
   @impl true
   def step(state, inputs, tick, context) do
     # Pure function: state + inputs -> {new_state, outputs}
-    {new_state, %{result: new_state, east: Map.get(inputs, :west)}}
+    # Use PE.value/2 to handle :empty / nil inputs idiomatically
+    west_val = ExSystolic.PE.value(Map.get(inputs, :west), 0)
+    {new_state, %{result: new_state, east: west_val}}
   end
 end
 
@@ -398,13 +420,22 @@ The PE does not know where it is in the array (the `context` map provides `coord
 
 ## Roadmap
 
-### Phase 1: Interpreted Backend (current)
+### Phase 1: Interpreted Backend (v0.1.0)
 
 - Single BEAM process, fully deterministic
 - MAC PE, GEMM example, trace recording
 - 95%+ test coverage, property-based testing
 
-### Phase 2: Semi-ring Abstraction
+### Phase 2: Parallel Backend & Space Abstraction (v0.2.0)
+
+- Tile-based parallel backend via `Task.Supervisor` or `Poolex` worker pool
+- Pluggable `ExSystolic.Space` behaviour with `Grid2D` default
+- `Backend.LinkOps` shared link operations (eliminates triple-duplicated code)
+- Cross-backend determinism proven by conformance tests
+- 185 tests + 34 doctests, 98.4% coverage
+- Full code review with 80 findings addressed (70% fixed, 18% partially fixed)
+
+### Phase 3: Semi-ring Abstraction
 
 - Extract `*` and `+` from the MAC PE into a configurable semi-ring module
 - Boolean semi-ring (AND/OR) for reachability
@@ -464,7 +495,7 @@ The PE does not know where it is in the array (the `context` map provides `coord
 ```elixir
 def deps do
   [
-    {:ex_systolic, "~> 0.1.0"}
+    {:ex_systolic, "~> 0.2.0"}
   ]
 end
 ```
